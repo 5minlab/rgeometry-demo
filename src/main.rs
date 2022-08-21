@@ -416,29 +416,32 @@ struct MyApp {
     rects: Vec<Rect>,
 }
 
+fn gen_rects(view: f64, count: usize) -> Vec<Rect> {
+    let mut rng = thread_rng();
+    let mut rects = Vec::new();
+    for _ in 0..count {
+        let w = rng.gen_range(3.0..6.0);
+        let h = rng.gen_range(0.1..3.0);
+
+        let inner = view - (w + h) - 2.0;
+        let x = rng.gen_range(-inner..inner);
+        let y = rng.gen_range(-inner..inner);
+
+        rects.push(Rect::new(w, h).pos(x, y));
+    }
+    rects
+}
+
 impl Default for MyApp {
     fn default() -> Self {
-        let mut rng = thread_rng();
-
         let view = 50f64;
         let count = 100;
 
-        let mut rects = Vec::new();
-
+        let rects = gen_rects(view, count);
         let opts = EguiRectOpts {
             render_net: true,
             ..EguiRectOpts::default()
         };
-
-        for _ in 0..count {
-            let x = rng.gen_range(-view..view);
-            let y = rng.gen_range(-view..view);
-
-            let w = rng.gen_range(3.0..6.0);
-            let h = rng.gen_range(0.1..3.0);
-
-            rects.push(Rect::new(w, h).pos(x, y));
-        }
 
         Self {
             pause: false,
@@ -462,6 +465,9 @@ impl eframe::App for MyApp {
         if ctx.input().key_pressed(Key::R) {
             self.t = 0.0;
         }
+        if ctx.input().key_released(Key::G) {
+            self.rects = gen_rects(self.view, self.count);
+        }
         if ctx.input().key_pressed(Key::S) {
             self.t += 1.0 / 60.0;
         }
@@ -474,17 +480,22 @@ impl eframe::App for MyApp {
         let view = self.view;
 
         let t = self.t;
+
+        let sw = Stopwatch::start_new();
         let rects = self
             .rects
             .iter()
             .map(|r| EguiRect { rect: r.rot(t) })
             .collect::<Vec<_>>();
 
+        let elapsed_build = sw.elapsed_ms();
+
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.horizontal(|ui| {
                 ui.checkbox(&mut self.opts.render_polygon, "polygon");
                 ui.checkbox(&mut self.opts.render_bb, "bb");
                 ui.checkbox(&mut self.opts.render_points, "points");
+                ui.label(format!("elapsed={}ms", elapsed_build));
             });
 
             let plot = Plot::new(0)
@@ -506,7 +517,7 @@ impl eframe::App for MyApp {
                     r.ui(plot_ui, &self.opts);
                 }
 
-                let area = view * 1.2;
+                let area = view;
                 plot_ui.points(
                     plot::Points::new(PlotPoints::Owned(vec![
                         PlotPoint::new(-area, -area),
@@ -514,7 +525,7 @@ impl eframe::App for MyApp {
                         PlotPoint::new(-area, area),
                         PlotPoint::new(area, area),
                     ]))
-                    .color(Color32::BLACK),
+                    .color(Color32::WHITE),
                 );
             });
         });
