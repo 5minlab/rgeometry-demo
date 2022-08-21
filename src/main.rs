@@ -1,3 +1,4 @@
+use rand::{thread_rng, Rng};
 use std::f64::consts::SQRT_2;
 
 use eframe::{
@@ -37,7 +38,7 @@ fn pt_egui(p: &Point<f64, 2>) -> PlotPoint {
 pub fn contains(p: &Polygon<f64>, p0: &Point<f64, 2>) -> bool {
     if true {
         let p1 = p0 + &Vector([1000., 0.]);
-        intersects(p, p0, &p1)
+        intersects(p, p0, &p1) % 2 == 0
     } else {
         match p.locate(p0) {
             PointLocation::Inside => true,
@@ -46,20 +47,18 @@ pub fn contains(p: &Polygon<f64>, p0: &Point<f64, 2>) -> bool {
     }
 }
 
-pub fn intersects(p: &Polygon<f64>, p0: &Point<f64, 2>, p1: &Point<f64, 2>) -> bool {
+pub fn intersects(p: &Polygon<f64>, p0: &Point<f64, 2>, p1: &Point<f64, 2>) -> usize {
     let ray = DirectedEdge { src: p0, dst: p1 };
     let mut intersections = 0;
     for edge in p.iter_boundary_edges() {
         if let Some(rgeometry::data::ILineSegment::Crossing) = ray.intersect(edge) {
-            // Only count crossing that aren't leaning to the right.
             intersections += 1;
         }
     }
-    // handle polygon without holes
-    intersections % 2 == 1
+    intersections
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 struct Rect {
     pub pos: [f64; 2],
     pub extent: [f64; 2],
@@ -206,7 +205,7 @@ impl GridNet {
                 let v = Vector([dir.x as f64, dir.y as f64]);
 
                 let t = center + v;
-                if !intersects(p, &center, &t) {
+                if intersects(p, &center, &t) == 0 {
                     continue;
                 }
 
@@ -309,7 +308,7 @@ struct EguiRect {
 }
 
 impl EguiRect {
-    fn ui(&self, plot_ui: &mut PlotUi) {
+    fn ui(&self, plot_ui: &mut PlotUi, opts: &EguiRectOpts) {
         let p = self.rect.polygon();
         let pe = p_rg_to_egui(&p);
 
@@ -327,18 +326,20 @@ impl EguiRect {
 
         let area = GridArea::new(&bb);
 
-        for g in area.iter() {
-            // cell center
-            let center = g.center();
+        if opts.render_points {
+            for g in area.iter() {
+                // cell center
+                let center = g.center();
 
-            let bucket = match contains(&r_extend_p, &center) {
-                false => &mut points,
-                true => match contains(&p, &center) {
-                    true => &mut p_points,
-                    false => &mut pe_points,
-                },
-            };
-            bucket.push(pt_egui(&center));
+                let bucket = match contains(&r_extend_p, &center) {
+                    false => &mut points,
+                    true => match contains(&p, &center) {
+                        true => &mut p_points,
+                        false => &mut pe_points,
+                    },
+                };
+                bucket.push(pt_egui(&center));
+            }
         }
 
         // extended bounding box
@@ -351,54 +352,104 @@ impl EguiRect {
             a
         };
 
-        let mut net = GridNet::new(area2);
-        net.update(&p);
-
-        plot_ui.polygon(pe.color(Color32::RED));
-        plot_ui.polygon(bb_pe.color(Color32::BLUE));
+        if opts.render_polygon {
+            plot_ui.polygon(pe.color(Color32::RED));
+        }
+        if opts.render_bb {
+            plot_ui.polygon(bb_pe.color(Color32::BLUE));
+        }
 
         plot_ui.points(plot::Points::new(PlotPoints::Owned(points)).color(Color32::LIGHT_BLUE));
         plot_ui.points(plot::Points::new(PlotPoints::Owned(p_points)).color(Color32::LIGHT_RED));
         plot_ui.points(plot::Points::new(PlotPoints::Owned(pe_points)).color(Color32::GREEN));
 
-        for g in area2.iter() {
-            if let Some(mask) = net.at(&g) {
-                for i in 0..8u8 {
-                    let blocked = *mask & (1 << i) != 0;
-                    if !blocked {
-                        continue;
+        if opts.render_net {
+            let mut net = GridNet::new(area2);
+            net.update(&p);
+
+            for g in area2.iter() {
+                if let Some(mask) = net.at(&g) {
+                    for i in 0..8u8 {
+                        let blocked = *mask & (1 << i) != 0;
+                        if !blocked {
+                            continue;
+                        }
+                        let center = g.center();
+                        let p0 = center + &HEX_VECS[i as usize];
+                        let p1 = center + &HEX_VECS[(i + 1) as usize];
+
+                        plot_ui.line(
+                            plot::Line::new(PlotPoints::Owned(vec![pt_egui(&p0), pt_egui(&p1)]))
+                                .color(Color32::BROWN),
+                        );
+
+                        /*
+                        let dir = &VECS[i as usize];
+                        let v = Vector([dir.x as f64, dir.y as f64]);
+                        let t = center + v;
+                        line_lists.push(vec![pt_egui(&center), pt_egui(&t)]);
+                        */
                     }
-                    let center = g.center();
-                    let p0 = center + &HEX_VECS[i as usize];
-                    let p1 = center + &HEX_VECS[(i + 1) as usize];
-
-                    plot_ui.line(
-                        plot::Line::new(PlotPoints::Owned(vec![pt_egui(&p0), pt_egui(&p1)]))
-                            .color(Color32::BROWN),
-                    );
-
-                    /*
-                    let dir = &VECS[i as usize];
-                    let v = Vector([dir.x as f64, dir.y as f64]);
-                    let t = center + v;
-                    line_lists.push(vec![pt_egui(&center), pt_egui(&t)]);
-                    */
                 }
             }
         }
     }
 }
 
+#[derive(Default)]
+struct EguiRectOpts {
+    render_points: bool,
+    render_bb: bool,
+    render_polygon: bool,
+    render_net: bool,
+}
+
 struct MyApp {
     pause: bool,
     t: f64,
+
+    count: usize,
+    view: f64,
+
+    opts: EguiRectOpts,
+
+    rects: Vec<Rect>,
 }
 
 impl Default for MyApp {
     fn default() -> Self {
+        let mut rng = thread_rng();
+
+        let view = 50f64;
+        let count = 100;
+
+        let mut rects = Vec::new();
+
+        let opts = EguiRectOpts {
+            render_net: true,
+            ..EguiRectOpts::default()
+        };
+
+        for _ in 0..count {
+            let x = rng.gen_range(-view..view);
+            let y = rng.gen_range(-view..view);
+
+            let w = rng.gen_range(3.0..6.0);
+            let h = rng.gen_range(0.1..3.0);
+
+            rects.push(Rect::new(w, h).pos(x, y));
+        }
+
         Self {
             pause: false,
             t: 0.0,
+
+            count,
+            view,
+
+            opts,
+
+            rects,
         }
     }
 }
@@ -420,27 +471,51 @@ impl eframe::App for MyApp {
             ctx.request_repaint();
         }
 
-        let view = 15f64;
+        let view = self.view;
 
-        let w = 10f64;
-        let h = 2f64;
-
-        let r = Rect::new(w, h).rot(self.t);
-        let r = EguiRect { rect: r };
+        let t = self.t;
+        let rects = self
+            .rects
+            .iter()
+            .map(|r| EguiRect { rect: r.rot(t) })
+            .collect::<Vec<_>>();
 
         egui::CentralPanel::default().show(ctx, |ui| {
+            ui.horizontal(|ui| {
+                ui.checkbox(&mut self.opts.render_polygon, "polygon");
+                ui.checkbox(&mut self.opts.render_bb, "bb");
+                ui.checkbox(&mut self.opts.render_points, "points");
+            });
+
             let plot = Plot::new(0)
                 .legend(Legend::default())
                 .data_aspect(1.0)
+                /*
                 .center_x_axis(true)
                 .center_y_axis(true)
                 .include_x(-view)
                 .include_x(view)
                 .include_y(-view)
-                .include_y(view);
+                .include_y(view)
+                */
+                .allow_zoom(true)
+                .allow_drag(true);
 
             plot.show(ui, |plot_ui| {
-                r.ui(plot_ui);
+                for r in rects {
+                    r.ui(plot_ui, &self.opts);
+                }
+
+                let area = view * 1.2;
+                plot_ui.points(
+                    plot::Points::new(PlotPoints::Owned(vec![
+                        PlotPoint::new(-area, -area),
+                        PlotPoint::new(area, -area),
+                        PlotPoint::new(-area, area),
+                        PlotPoint::new(area, area),
+                    ]))
+                    .color(Color32::BLACK),
+                );
             });
         });
     }

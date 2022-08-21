@@ -8,5 +8,6 @@ edition = "2021"
 [dependencies]
 anyhow = "1.0.62"
 eframe = "0.19.0"
+rand = "0.8.5"
 rgeometry = "0.9.0"
 stopwatch = "0.0.7"
