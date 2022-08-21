@@ -111,6 +111,53 @@ impl Default for MyApp {
     }
 }
 
+struct GridIterator {
+    x_min: i32,
+    x_max: i32,
+    #[allow(unused)]
+    y_min: i32,
+    y_max: i32,
+
+    x: i32,
+    y: i32,
+}
+
+impl GridIterator {
+    fn new(t: &(Point<f32, 2>, Point<f32, 2>)) -> Self {
+        let x_min = t.0[0].floor() as i32;
+        let x_max = t.1[0].ceil() as i32;
+        let y_min = t.0[1].floor() as i32;
+        let y_max = t.1[1].ceil() as i32;
+        Self {
+            x_min,
+            x_max,
+            y_min,
+            y_max,
+
+            x: x_min - 1,
+            y: y_min,
+        }
+    }
+}
+
+impl Iterator for GridIterator {
+    type Item = (i32, i32);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.x += 1;
+        if self.x == self.x_max {
+            self.x = self.x_min;
+            self.y += 1;
+        }
+
+        if self.y == self.y_max {
+            None
+        } else {
+            Some((self.x, self.y))
+        }
+    }
+}
+
 impl eframe::App for MyApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         if ctx.input().key_pressed(Key::Space) {
@@ -125,7 +172,9 @@ impl eframe::App for MyApp {
 
         if !self.pause {
             self.t += ctx.input().predicted_dt;
+            ctx.request_repaint();
         }
+
         let view = 5f32;
 
         let w = 3f32;
@@ -163,27 +212,25 @@ impl eframe::App for MyApp {
                 let mut p_points = Vec::new();
                 let mut pe_points = Vec::new();
 
-                for x in bb.0[0].floor() as isize..bb.1[0].ceil() as isize {
-                    for y in bb.0[1].floor() as isize..bb.1[1].ceil() as isize {
-                        // cell center
-                        let x = x as f64 + 0.5;
-                        let y = y as f64 + 0.5;
-                        let center = Point::new([x as f32, y as f32]);
-                        let point = PlotPoint::new(x, y);
+                let iter = GridIterator::new(&bb);
 
-                        let p = match r_extend_p.locate(&center) {
-                            PointLocation::Outside => &mut points,
-                            PointLocation::Inside | PointLocation::OnBoundary => {
-                                match p.locate(&center) {
-                                    PointLocation::Inside | PointLocation::OnBoundary => {
-                                        &mut p_points
-                                    }
-                                    PointLocation::Outside => &mut pe_points,
-                                }
+                for (x, y) in iter {
+                    // cell center
+                    let x = x as f64 + 0.5;
+                    let y = y as f64 + 0.5;
+                    let center = Point::new([x as f32, y as f32]);
+                    let point = PlotPoint::new(x, y);
+
+                    let p = match r_extend_p.locate(&center) {
+                        PointLocation::Outside => &mut points,
+                        PointLocation::Inside | PointLocation::OnBoundary => {
+                            match p.locate(&center) {
+                                PointLocation::Inside | PointLocation::OnBoundary => &mut p_points,
+                                PointLocation::Outside => &mut pe_points,
                             }
-                        };
-                        p.push(point);
-                    }
+                        }
+                    };
+                    p.push(point);
                 }
 
                 plot_ui.points(
@@ -197,7 +244,5 @@ impl eframe::App for MyApp {
             });
             //
         });
-
-        ctx.request_repaint();
     }
 }
