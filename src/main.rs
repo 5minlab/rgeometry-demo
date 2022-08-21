@@ -401,8 +401,16 @@ impl eframe::App for MyApp {
             ));
             plot.show(ui, |plot_ui| {
                 plot_ui.polygon(pe.color(Color32::RED));
-
                 plot_ui.polygon(bb_pe.color(Color32::BLUE));
+
+                plot_ui.points(
+                    plot::Points::new(PlotPoints::Owned(points)).color(Color32::LIGHT_BLUE),
+                );
+                plot_ui.points(
+                    plot::Points::new(PlotPoints::Owned(p_points)).color(Color32::LIGHT_RED),
+                );
+                plot_ui
+                    .points(plot::Points::new(PlotPoints::Owned(pe_points)).color(Color32::GREEN));
 
                 const HEX_OFFSET: f64 = 0.2886751345948128 * 0.5;
                 const C_H: f64 = 0.5;
@@ -446,15 +454,6 @@ impl eframe::App for MyApp {
                         }
                     }
                 }
-
-                plot_ui.points(
-                    plot::Points::new(PlotPoints::Owned(points)).color(Color32::LIGHT_BLUE),
-                );
-                plot_ui.points(
-                    plot::Points::new(PlotPoints::Owned(p_points)).color(Color32::LIGHT_RED),
-                );
-                plot_ui
-                    .points(plot::Points::new(PlotPoints::Owned(pe_points)).color(Color32::GREEN));
             });
             //
         });
