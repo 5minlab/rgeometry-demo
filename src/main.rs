@@ -4,12 +4,13 @@ use eframe::{
     egui::{
         self,
         plot::{self, Legend, Plot, PlotPoint, PlotPoints},
-        Key,
+        Key, Label,
     },
     epaint::Color32,
 };
 use rgeometry::data::{DirectedEdge, Point, PointLocation, Polygon, Vector};
 use rgeometry::Intersects;
+use stopwatch::Stopwatch;
 
 type P = Vector<f64, 2>;
 
@@ -33,6 +34,18 @@ fn pt_egui(p: &Point<f64, 2>) -> PlotPoint {
     PlotPoint::new(x, y)
 }
 
+pub fn contains(p: &Polygon<f64>, p0: &Point<f64, 2>) -> bool {
+    if true {
+        let p1 = p0 + &Vector([1000., 0.]);
+        intersects(p, p0, &p1)
+    } else {
+        match p.locate(p0) {
+            PointLocation::Inside => true,
+            _ => false,
+        }
+    }
+}
+
 pub fn intersects(p: &Polygon<f64>, p0: &Point<f64, 2>, p1: &Point<f64, 2>) -> bool {
     let ray = DirectedEdge { src: p0, dst: p1 };
     let mut intersections = 0;
@@ -43,7 +56,7 @@ pub fn intersects(p: &Polygon<f64>, p0: &Point<f64, 2>, p1: &Point<f64, 2>) -> b
         }
     }
     // handle polygon without holes
-    intersections > 0
+    intersections % 2 == 1
 }
 
 #[derive(Clone, Copy)]
@@ -313,6 +326,8 @@ impl eframe::App for MyApp {
         let w = 10f64;
         let h = 2f64;
 
+        let sw = Stopwatch::start_new();
+
         let r = Rect::new(w, h).rot(self.t);
         let p = r.polygon();
         let pe = p_rg_to_egui(&p);
@@ -325,6 +340,50 @@ impl eframe::App for MyApp {
         let bb_p = bb_r.polygon();
         let bb_pe = p_rg_to_egui(&bb_p);
 
+        let elapsed_poly = sw.elapsed_ms();
+        let sw = Stopwatch::start_new();
+
+        let mut points = Vec::new();
+        let mut p_points = Vec::new();
+        let mut pe_points = Vec::new();
+
+        let area = GridArea::new(&bb);
+
+        let mut count = 0;
+        for g in area.iter() {
+            count += 1;
+            // cell center
+            let center = g.center();
+
+            let bucket = match contains(&r_extend_p, &center) {
+                false => &mut points,
+                true => match contains(&p, &center) {
+                    true => &mut p_points,
+                    false => &mut pe_points,
+                },
+            };
+            bucket.push(pt_egui(&center));
+        }
+        eprintln!("count={count}");
+
+        let elapsed_points = sw.elapsed_ms();
+        let sw = Stopwatch::start_new();
+
+        // extended bounding box
+        let area2 = {
+            let mut a = area;
+            a.x_min -= 1;
+            a.y_min -= 1;
+            a.x_max += 1;
+            a.y_max += 1;
+            a
+        };
+
+        let mut net = GridNet::new(area2);
+        net.update(&p);
+
+        let elapsed_net = sw.elapsed_ms();
+
         egui::CentralPanel::default().show(ctx, |ui| {
             let plot = Plot::new(0)
                 .legend(Legend::default())
@@ -336,45 +395,14 @@ impl eframe::App for MyApp {
                 .include_y(-view)
                 .include_y(view);
 
+            ui.label(format!(
+                "timings: poly={}ms, points={}ms, net={}ms",
+                elapsed_poly, elapsed_points, elapsed_net
+            ));
             plot.show(ui, |plot_ui| {
                 plot_ui.polygon(pe.color(Color32::RED));
 
                 plot_ui.polygon(bb_pe.color(Color32::BLUE));
-
-                let mut points = Vec::new();
-                let mut p_points = Vec::new();
-                let mut pe_points = Vec::new();
-
-                let area = GridArea::new(&bb);
-
-                for g in area.iter() {
-                    // cell center
-                    let center = g.center();
-
-                    let bucket = match r_extend_p.locate(&center) {
-                        PointLocation::Outside => &mut points,
-                        PointLocation::Inside | PointLocation::OnBoundary => {
-                            match p.locate(&center) {
-                                PointLocation::Inside | PointLocation::OnBoundary => &mut p_points,
-                                PointLocation::Outside => &mut pe_points,
-                            }
-                        }
-                    };
-                    bucket.push(pt_egui(&center));
-                }
-
-                // extended bounding box
-                let area2 = {
-                    let mut a = area;
-                    a.x_min -= 1;
-                    a.y_min -= 1;
-                    a.x_max += 1;
-                    a.y_max += 1;
-                    a
-                };
-
-                let mut net = GridNet::new(area2);
-                net.update(&p);
 
                 const HEX_OFFSET: f64 = 0.2886751345948128 * 0.5;
                 const C_H: f64 = 0.5;
