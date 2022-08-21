@@ -132,7 +132,7 @@ fn main() {
 ///  - covering area: ([x, x+1), [y, y+1)]
 ///  - center: (x + 0.5, y + 0.5)
 ///  - world to grid idx, with unit grid size: world_x.floor()
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 struct GridPos {
     x: i32,
     y: i32,
@@ -210,27 +210,82 @@ impl GridNet {
                 }
 
                 let neighbor = g + *dir;
-                if let Some(mask) = self.at(&g) {
+                if let Some(mask) = self.at_mut(&g) {
                     *mask |= 1u8 << idx;
                 }
-                if let Some(mask) = self.at(&neighbor) {
+                if let Some(mask) = self.at_mut(&neighbor) {
                     *mask |= 1u8 << (idx + 4);
                 }
             }
         }
     }
 
-    fn at(&mut self, p: &GridPos) -> Option<&mut u8> {
-        let a = &self.area;
-        if p.x < a.x_min || p.x >= a.x_max || p.y <= a.y_min || p.y >= a.y_max {
-            return None;
+    fn apply(&mut self, other: &Self) {
+        if let Some(area) = self.area.intersects(&other.area) {
+            let stripe = (area.x_max - area.x_min) as usize;
+
+            for y in area.y_min..area.y_max {
+                let g = GridPos { x: area.x_min, y };
+                let idx_dst = self.idx(&g).unwrap();
+                let idx_src = other.idx(&g).unwrap();
+
+                let slice_dst = &mut self.masks[idx_dst..(idx_dst + stripe)];
+                let slice_src = &other.masks[idx_src..(idx_src + stripe)];
+
+                for i in 0..stripe {
+                    slice_dst[i] |= slice_src[i];
+                }
+            }
         }
-        let idx = p.x - a.x_min + (p.y - a.y_min) * (a.x_max - a.x_min);
-        Some(&mut self.masks[idx as usize])
+    }
+
+    fn idx(&self, p: &GridPos) -> Option<usize> {
+        let a = &self.area;
+        if p.x < a.x_min || p.x >= a.x_max || p.y < a.y_min || p.y >= a.y_max {
+            None
+        } else {
+            Some((p.x - a.x_min + (p.y - a.y_min) * (a.x_max - a.x_min)) as usize)
+        }
+    }
+
+    fn at_mut(&mut self, p: &GridPos) -> Option<&mut u8> {
+        self.idx(p).map(|idx| &mut self.masks[idx])
+    }
+
+    fn at(&self, p: &GridPos) -> Option<u8> {
+        self.idx(p).map(|idx| self.masks[idx])
+    }
+
+    fn ui(&self, plot_ui: &mut PlotUi) {
+        for g in self.area.iter() {
+            if let Some(mask) = self.at(&g) {
+                for i in 0..8u8 {
+                    let blocked = mask & (1 << i) != 0;
+                    if !blocked {
+                        continue;
+                    }
+                    let center = g.center();
+                    let p0 = center + &HEX_VECS[i as usize];
+                    let p1 = center + &HEX_VECS[(i + 1) as usize];
+
+                    plot_ui.line(
+                        plot::Line::new(PlotPoints::Owned(vec![pt_egui(&p0), pt_egui(&p1)]))
+                            .color(Color32::BROWN),
+                    );
+
+                    /*
+                    let dir = &VECS[i as usize];
+                    let v = Vector([dir.x as f64, dir.y as f64]);
+                    let t = center + v;
+                    line_lists.push(vec![pt_egui(&center), pt_egui(&t)]);
+                    */
+                }
+            }
+        }
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 struct GridArea {
     pub x_min: i32,
     pub x_max: i32,
@@ -239,6 +294,15 @@ struct GridArea {
 }
 
 impl GridArea {
+    fn extent(x: f64, y: f64) -> Self {
+        Self {
+            x_min: (-x).floor() as i32,
+            x_max: x.ceil() as i32,
+            y_min: (-y).floor() as i32,
+            y_max: y.ceil() as i32,
+        }
+    }
+
     fn new(t: &(Point<f64, 2>, Point<f64, 2>)) -> Self {
         let x_min = t.0[0].floor() as i32;
         let x_max = t.1[0].ceil() as i32;
@@ -249,6 +313,23 @@ impl GridArea {
             x_max,
             y_min,
             y_max,
+        }
+    }
+
+    fn intersects(&self, other: &Self) -> Option<Self> {
+        let x_min = self.x_min.max(other.x_min);
+        let x_max = self.x_max.min(other.x_max);
+        let y_min = self.y_min.max(other.y_min);
+        let y_max = self.y_max.min(other.y_max);
+        if x_min >= x_max || y_min >= y_max {
+            None
+        } else {
+            Some(Self {
+                x_min,
+                x_max,
+                y_min,
+                y_max,
+            })
         }
     }
 
@@ -305,42 +386,42 @@ const HEX_VECS: [Vector<f64, 2>; 9] = [
 
 struct EguiRect {
     rect: Rect,
+
+    points: Vec<PlotPoint>,
+    p_points: Vec<PlotPoint>,
+    pe_points: Vec<PlotPoint>,
+
+    net: GridNet,
 }
 
 impl EguiRect {
-    fn ui(&self, plot_ui: &mut PlotUi, opts: &EguiRectOpts) {
-        let p = self.rect.polygon();
-        let pe = p_rg_to_egui(&p);
-
-        let r_extend = self.rect.add_extents(SQRT_2 / 2.0, SQRT_2 / 2.0);
-        let r_extend_p = r_extend.polygon();
-
-        let bb = p.bounding_box();
-        let bb_r = Rect::from_bb(&bb);
-        let bb_p = bb_r.polygon();
-        let bb_pe = p_rg_to_egui(&bb_p);
-
+    fn new(rect: Rect) -> Self {
         let mut points = Vec::new();
         let mut p_points = Vec::new();
         let mut pe_points = Vec::new();
 
+        let p = rect.polygon();
+
+        let r_extend = rect.add_extents(SQRT_2 / 2.0, SQRT_2 / 2.0);
+        let r_extend_p = r_extend.polygon();
+
+        let bb = p.bounding_box();
         let area = GridArea::new(&bb);
 
-        if opts.render_points {
-            for g in area.iter() {
-                // cell center
-                let center = g.center();
+        for g in area.iter() {
+            // cell center
+            let center = g.center();
 
-                let bucket = match contains(&r_extend_p, &center) {
-                    false => &mut points,
-                    true => match contains(&p, &center) {
-                        true => &mut p_points,
-                        false => &mut pe_points,
-                    },
-                };
-                bucket.push(pt_egui(&center));
-            }
+            let bucket = match contains(&r_extend_p, &center) {
+                false => &mut points,
+                true => match contains(&p, &center) {
+                    true => &mut p_points,
+                    false => &mut pe_points,
+                },
+            };
+            bucket.push(pt_egui(&center));
         }
+        let area = GridArea::new(&bb);
 
         // extended bounding box
         let area2 = {
@@ -352,6 +433,29 @@ impl EguiRect {
             a
         };
 
+        let mut net = GridNet::new(area2);
+        net.update(&p);
+
+        Self {
+            rect,
+
+            points,
+            p_points,
+            pe_points,
+
+            net,
+        }
+    }
+
+    fn ui(self, plot_ui: &mut PlotUi, opts: &EguiRectOpts) {
+        let p = self.rect.polygon();
+        let pe = p_rg_to_egui(&p);
+
+        let bb = p.bounding_box();
+        let bb_r = Rect::from_bb(&bb);
+        let bb_p = bb_r.polygon();
+        let bb_pe = p_rg_to_egui(&bb_p);
+
         if opts.render_polygon {
             plot_ui.polygon(pe.color(Color32::RED));
         }
@@ -359,39 +463,19 @@ impl EguiRect {
             plot_ui.polygon(bb_pe.color(Color32::BLUE));
         }
 
-        plot_ui.points(plot::Points::new(PlotPoints::Owned(points)).color(Color32::LIGHT_BLUE));
-        plot_ui.points(plot::Points::new(PlotPoints::Owned(p_points)).color(Color32::LIGHT_RED));
-        plot_ui.points(plot::Points::new(PlotPoints::Owned(pe_points)).color(Color32::GREEN));
+        if opts.render_points {
+            plot_ui.points(
+                plot::Points::new(PlotPoints::Owned(self.points)).color(Color32::LIGHT_BLUE),
+            );
+            plot_ui.points(
+                plot::Points::new(PlotPoints::Owned(self.p_points)).color(Color32::LIGHT_RED),
+            );
+            plot_ui
+                .points(plot::Points::new(PlotPoints::Owned(self.pe_points)).color(Color32::GREEN));
+        }
 
-        if opts.render_net {
-            let mut net = GridNet::new(area2);
-            net.update(&p);
-
-            for g in area2.iter() {
-                if let Some(mask) = net.at(&g) {
-                    for i in 0..8u8 {
-                        let blocked = *mask & (1 << i) != 0;
-                        if !blocked {
-                            continue;
-                        }
-                        let center = g.center();
-                        let p0 = center + &HEX_VECS[i as usize];
-                        let p1 = center + &HEX_VECS[(i + 1) as usize];
-
-                        plot_ui.line(
-                            plot::Line::new(PlotPoints::Owned(vec![pt_egui(&p0), pt_egui(&p1)]))
-                                .color(Color32::BROWN),
-                        );
-
-                        /*
-                        let dir = &VECS[i as usize];
-                        let v = Vector([dir.x as f64, dir.y as f64]);
-                        let t = center + v;
-                        line_lists.push(vec![pt_egui(&center), pt_egui(&t)]);
-                        */
-                    }
-                }
-            }
+        if opts.render_rectnet {
+            self.net.ui(plot_ui);
         }
     }
 }
@@ -401,6 +485,7 @@ struct EguiRectOpts {
     render_points: bool,
     render_bb: bool,
     render_polygon: bool,
+    render_rectnet: bool,
     render_net: bool,
 }
 
@@ -439,7 +524,7 @@ impl Default for MyApp {
 
         let rects = gen_rects(view, count);
         let opts = EguiRectOpts {
-            render_net: true,
+            render_rectnet: true,
             ..EguiRectOpts::default()
         };
 
@@ -485,17 +570,31 @@ impl eframe::App for MyApp {
         let rects = self
             .rects
             .iter()
-            .map(|r| EguiRect { rect: r.rot(t) })
+            .map(|r| EguiRect::new(r.rot(t)))
             .collect::<Vec<_>>();
 
         let elapsed_build = sw.elapsed_ms();
+        let sw = Stopwatch::start_new();
+
+        let area = GridArea::extent(view, view);
+        let mut net = GridNet::new(area);
+
+        for rect in &rects {
+            net.apply(&rect.net);
+        }
+        let elapsed_net = sw.elapsed_ms();
 
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.horizontal(|ui| {
                 ui.checkbox(&mut self.opts.render_polygon, "polygon");
                 ui.checkbox(&mut self.opts.render_bb, "bb");
                 ui.checkbox(&mut self.opts.render_points, "points");
-                ui.label(format!("elapsed={}ms", elapsed_build));
+                ui.checkbox(&mut self.opts.render_rectnet, "rectnet");
+                ui.checkbox(&mut self.opts.render_net, "net");
+                ui.label(format!(
+                    "elapsed build={}ms, net={}ms",
+                    elapsed_build, elapsed_net
+                ));
             });
 
             let plot = Plot::new(0)
@@ -515,6 +614,10 @@ impl eframe::App for MyApp {
             plot.show(ui, |plot_ui| {
                 for r in rects {
                     r.ui(plot_ui, &self.opts);
+                }
+
+                if self.opts.render_net {
+                    net.ui(plot_ui);
                 }
 
                 let area = view;
