@@ -3,8 +3,8 @@ use std::f64::consts::SQRT_2;
 use eframe::{
     egui::{
         self,
-        plot::{self, Legend, Plot, PlotPoint, PlotPoints},
-        Key, Label,
+        plot::{self, Legend, Plot, PlotPoint, PlotPoints, PlotUi},
+        Key,
     },
     epaint::Color32,
 };
@@ -127,20 +127,6 @@ fn main() {
         options,
         Box::new(|_cc| Box::new(MyApp::default())),
     );
-}
-
-struct MyApp {
-    pause: bool,
-    t: f64,
-}
-
-impl Default for MyApp {
-    fn default() -> Self {
-        Self {
-            pause: false,
-            t: 0.0,
-        }
-    }
 }
 
 /// for GridPos (x, y),
@@ -304,6 +290,119 @@ impl Iterator for GridIterator {
     }
 }
 
+const HEX_OFFSET: f64 = 0.2886751345948128 * 0.5;
+const C_H: f64 = 0.5;
+const HEX_VECS: [Vector<f64, 2>; 9] = [
+    Vector([C_H, -HEX_OFFSET]),
+    Vector([C_H, HEX_OFFSET]),
+    Vector([HEX_OFFSET, C_H]),
+    Vector([-HEX_OFFSET, C_H]),
+    Vector([-C_H, HEX_OFFSET]),
+    Vector([-C_H, -HEX_OFFSET]),
+    Vector([-HEX_OFFSET, -C_H]),
+    Vector([HEX_OFFSET, -C_H]),
+    Vector([C_H, -HEX_OFFSET]),
+];
+
+struct EguiRect {
+    rect: Rect,
+}
+
+impl EguiRect {
+    fn ui(&self, plot_ui: &mut PlotUi) {
+        let p = self.rect.polygon();
+        let pe = p_rg_to_egui(&p);
+
+        let r_extend = self.rect.add_extents(SQRT_2 / 2.0, SQRT_2 / 2.0);
+        let r_extend_p = r_extend.polygon();
+
+        let bb = p.bounding_box();
+        let bb_r = Rect::from_bb(&bb);
+        let bb_p = bb_r.polygon();
+        let bb_pe = p_rg_to_egui(&bb_p);
+
+        let mut points = Vec::new();
+        let mut p_points = Vec::new();
+        let mut pe_points = Vec::new();
+
+        let area = GridArea::new(&bb);
+
+        for g in area.iter() {
+            // cell center
+            let center = g.center();
+
+            let bucket = match contains(&r_extend_p, &center) {
+                false => &mut points,
+                true => match contains(&p, &center) {
+                    true => &mut p_points,
+                    false => &mut pe_points,
+                },
+            };
+            bucket.push(pt_egui(&center));
+        }
+
+        // extended bounding box
+        let area2 = {
+            let mut a = area;
+            a.x_min -= 1;
+            a.y_min -= 1;
+            a.x_max += 1;
+            a.y_max += 1;
+            a
+        };
+
+        let mut net = GridNet::new(area2);
+        net.update(&p);
+
+        plot_ui.polygon(pe.color(Color32::RED));
+        plot_ui.polygon(bb_pe.color(Color32::BLUE));
+
+        plot_ui.points(plot::Points::new(PlotPoints::Owned(points)).color(Color32::LIGHT_BLUE));
+        plot_ui.points(plot::Points::new(PlotPoints::Owned(p_points)).color(Color32::LIGHT_RED));
+        plot_ui.points(plot::Points::new(PlotPoints::Owned(pe_points)).color(Color32::GREEN));
+
+        for g in area2.iter() {
+            if let Some(mask) = net.at(&g) {
+                for i in 0..8u8 {
+                    let blocked = *mask & (1 << i) != 0;
+                    if !blocked {
+                        continue;
+                    }
+                    let center = g.center();
+                    let p0 = center + &HEX_VECS[i as usize];
+                    let p1 = center + &HEX_VECS[(i + 1) as usize];
+
+                    plot_ui.line(
+                        plot::Line::new(PlotPoints::Owned(vec![pt_egui(&p0), pt_egui(&p1)]))
+                            .color(Color32::BROWN),
+                    );
+
+                    /*
+                    let dir = &VECS[i as usize];
+                    let v = Vector([dir.x as f64, dir.y as f64]);
+                    let t = center + v;
+                    line_lists.push(vec![pt_egui(&center), pt_egui(&t)]);
+                    */
+                }
+            }
+        }
+    }
+}
+
+struct MyApp {
+    pause: bool,
+    t: f64,
+}
+
+impl Default for MyApp {
+    fn default() -> Self {
+        Self {
+            pause: false,
+            t: 0.0,
+        }
+    }
+}
+
 impl eframe::App for MyApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         if ctx.input().key_pressed(Key::Space) {
@@ -326,63 +425,8 @@ impl eframe::App for MyApp {
         let w = 10f64;
         let h = 2f64;
 
-        let sw = Stopwatch::start_new();
-
         let r = Rect::new(w, h).rot(self.t);
-        let p = r.polygon();
-        let pe = p_rg_to_egui(&p);
-
-        let r_extend = r.add_extents(SQRT_2 / 2.0, SQRT_2 / 2.0);
-        let r_extend_p = r_extend.polygon();
-
-        let bb = p.bounding_box();
-        let bb_r = Rect::from_bb(&bb);
-        let bb_p = bb_r.polygon();
-        let bb_pe = p_rg_to_egui(&bb_p);
-
-        let elapsed_poly = sw.elapsed_ms();
-        let sw = Stopwatch::start_new();
-
-        let mut points = Vec::new();
-        let mut p_points = Vec::new();
-        let mut pe_points = Vec::new();
-
-        let area = GridArea::new(&bb);
-
-        let mut count = 0;
-        for g in area.iter() {
-            count += 1;
-            // cell center
-            let center = g.center();
-
-            let bucket = match contains(&r_extend_p, &center) {
-                false => &mut points,
-                true => match contains(&p, &center) {
-                    true => &mut p_points,
-                    false => &mut pe_points,
-                },
-            };
-            bucket.push(pt_egui(&center));
-        }
-        eprintln!("count={count}");
-
-        let elapsed_points = sw.elapsed_ms();
-        let sw = Stopwatch::start_new();
-
-        // extended bounding box
-        let area2 = {
-            let mut a = area;
-            a.x_min -= 1;
-            a.y_min -= 1;
-            a.x_max += 1;
-            a.y_max += 1;
-            a
-        };
-
-        let mut net = GridNet::new(area2);
-        net.update(&p);
-
-        let elapsed_net = sw.elapsed_ms();
+        let r = EguiRect { rect: r };
 
         egui::CentralPanel::default().show(ctx, |ui| {
             let plot = Plot::new(0)
@@ -395,67 +439,9 @@ impl eframe::App for MyApp {
                 .include_y(-view)
                 .include_y(view);
 
-            ui.label(format!(
-                "timings: poly={}ms, points={}ms, net={}ms",
-                elapsed_poly, elapsed_points, elapsed_net
-            ));
             plot.show(ui, |plot_ui| {
-                plot_ui.polygon(pe.color(Color32::RED));
-                plot_ui.polygon(bb_pe.color(Color32::BLUE));
-
-                plot_ui.points(
-                    plot::Points::new(PlotPoints::Owned(points)).color(Color32::LIGHT_BLUE),
-                );
-                plot_ui.points(
-                    plot::Points::new(PlotPoints::Owned(p_points)).color(Color32::LIGHT_RED),
-                );
-                plot_ui
-                    .points(plot::Points::new(PlotPoints::Owned(pe_points)).color(Color32::GREEN));
-
-                const HEX_OFFSET: f64 = 0.2886751345948128 * 0.5;
-                const C_H: f64 = 0.5;
-                const HEX_VECS: [Vector<f64, 2>; 9] = [
-                    Vector([C_H, -HEX_OFFSET]),
-                    Vector([C_H, HEX_OFFSET]),
-                    Vector([HEX_OFFSET, C_H]),
-                    Vector([-HEX_OFFSET, C_H]),
-                    Vector([-C_H, HEX_OFFSET]),
-                    Vector([-C_H, -HEX_OFFSET]),
-                    Vector([-HEX_OFFSET, -C_H]),
-                    Vector([HEX_OFFSET, -C_H]),
-                    Vector([C_H, -HEX_OFFSET]),
-                ];
-
-                for g in area2.iter() {
-                    if let Some(mask) = net.at(&g) {
-                        for i in 0..8u8 {
-                            let blocked = *mask & (1 << i) != 0;
-                            if !blocked {
-                                continue;
-                            }
-                            let center = g.center();
-                            let p0 = center + &HEX_VECS[i as usize];
-                            let p1 = center + &HEX_VECS[(i + 1) as usize];
-
-                            plot_ui.line(
-                                plot::Line::new(PlotPoints::Owned(vec![
-                                    pt_egui(&p0),
-                                    pt_egui(&p1),
-                                ]))
-                                .color(Color32::BROWN),
-                            );
-
-                            /*
-                            let dir = &VECS[i as usize];
-                            let v = Vector([dir.x as f64, dir.y as f64]);
-                            let t = center + v;
-                            line_lists.push(vec![pt_egui(&center), pt_egui(&t)]);
-                            */
-                        }
-                    }
-                }
+                r.ui(plot_ui);
             });
-            //
         });
     }
 }
