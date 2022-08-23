@@ -96,7 +96,9 @@ pub mod boolean {
                     }
                 }
 
-                intersection_points.sort_by(|a, b| s0.p0.cmp_distance_to(a, b));
+                if intersection_points.len() > 2 {
+                    intersection_points.sort_by(|a, b| s0.p0.cmp_distance_to(a, b));
+                }
                 for i in 0..(intersection_points.len() - 1) {
                     let p0 = intersection_points[i];
                     let p1 = intersection_points[i + 1];
