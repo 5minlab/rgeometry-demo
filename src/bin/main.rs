@@ -22,9 +22,9 @@ pub mod boolean {
         ])
     }
 
-    #[derive(Debug, PartialEq, Eq)]
+    #[derive(Default, Debug, PartialEq, Eq)]
     pub struct SimplicalChain {
-        simplices: Vec<Simplex>,
+        pub(crate) simplices: Vec<Simplex>,
     }
 
     impl SimplicalChain {
@@ -108,7 +108,10 @@ pub mod boolean {
             SimplicalChain { simplices }
         }
 
-        pub fn bool_intersects(&self, other: &SimplicalChain) -> SimplicalChain {
+        fn subdivide_chracteristics(
+            &self,
+            other: &SimplicalChain,
+        ) -> (SimplicalChain, Vec<f64>, SimplicalChain, Vec<f64>) {
             let sx0 = self;
             let sx1 = other;
 
@@ -131,34 +134,43 @@ pub mod boolean {
                     ec_sx0[idx0] = 1.0;
                     continue;
                 }
-
-                for u in &sx1_subdivide.simplices {
-                    if !sx1_subdivide.simplices.contains(&s.reverse()) {
-                        let q = s.midpoint();
-                        let beta = u.beta(&q);
-                        ec_sx0[idx0] += beta;
-                    }
+                if sx1_subdivide.simplices.contains(&s.reverse()) {
+                    continue;
                 }
+
+                let q = s.midpoint();
+                for u in &sx1.simplices {
+                    ec_sx0[idx0] += u.beta(&q);
+                }
+                // eprintln!("idx={}, c={}", idx0, ec_sx0[idx0]);
             }
 
             for (idx1, u) in sx1_subdivide.simplices.iter().enumerate() {
-                for s in &sx0_subdivide.simplices {
-                    let u_in_sx0 = sx0_subdivide.simplices.contains(&u);
-                    let revu_in_sx0 = sx0_subdivide.simplices.contains(&u.reverse());
+                let u_in_f1 = sx0_subdivide.simplices.contains(&u);
+                let u_in_f2 = sx0_subdivide.simplices.contains(&u.reverse());
 
-                    let u_in_f1 = u_in_sx0;
-                    let u_in_f2 = revu_in_sx0;
-
-                    if !u_in_f1 && !u_in_f2 {
-                        let q = u.midpoint();
-                        let beta = s.beta(&q);
-                        ec_sx1[idx1] += beta;
-                    }
+                if u_in_f1 || u_in_f2 {
+                    continue;
                 }
-            }
 
-            eprintln!("sx0: {:?}/{:?}", sx0_subdivide, ec_sx0);
-            eprintln!("sx1: {:?}/{:?}", sx1_subdivide, ec_sx1);
+                let q = u.midpoint();
+                for s in &sx0.simplices {
+                    ec_sx1[idx1] += s.beta(&q);
+                }
+                // eprintln!("idx={}, c={}", idx1, ec_sx1[idx1]);
+            }
+            // eprintln!("0 {:?} {:?}", sx0_subdivide, ec_sx0);
+            // eprintln!("1 {:?} {:?}", sx1_subdivide, ec_sx1);
+
+            return (sx0_subdivide, ec_sx0, sx1_subdivide, ec_sx1);
+        }
+
+        pub fn bool_intersect(&self, other: &SimplicalChain) -> SimplicalChain {
+            let sx0 = self;
+            let sx1 = other;
+
+            // subdivide, simplical chain
+            let (sx0_subdivide, ec_sx0, sx1_subdivide, ec_sx1) = sx0.subdivide_chracteristics(sx1);
 
             let mut simplices = Vec::new();
 
@@ -176,13 +188,36 @@ pub mod boolean {
 
             SimplicalChain { simplices }
         }
+
+        pub fn bool_union(&self, other: &SimplicalChain) -> SimplicalChain {
+            let sx0 = self;
+            let sx1 = other;
+
+            // subdivide, simplical chain
+            let (sx0_subdivide, ec_sx0, sx1_subdivide, ec_sx1) = sx0.subdivide_chracteristics(sx1);
+
+            let mut simplices = Vec::new();
+
+            for (idx, s) in sx0_subdivide.simplices.into_iter().enumerate() {
+                if ec_sx0[idx] != 1.0 {
+                    simplices.push(s);
+                }
+            }
+            for (idx, s) in sx1_subdivide.simplices.into_iter().enumerate() {
+                if ec_sx1[idx] != 1.0 {
+                    simplices.push(s);
+                }
+            }
+
+            SimplicalChain { simplices }
+        }
     }
 
     #[derive(Debug, Clone, PartialEq, Eq)]
-    struct Simplex {
+    pub struct Simplex {
         // omit original point
-        p0: Point<f64>,
-        p1: Point<f64>,
+        pub(crate) p0: Point<f64>,
+        pub(crate) p1: Point<f64>,
     }
 
     impl Simplex {
@@ -200,8 +235,8 @@ pub mod boolean {
     const ORIGIN: Point<f64> = Point::new([0f64, 0f64]);
 
     impl Simplex {
-        // clockwise = 1
-        // counterclockwise = -1
+        // clockwise = -1
+        // counterclockwise = 1
         // colinear = 0
         fn sign(&self) -> Orientation {
             Point::orient_along_direction(&ORIGIN, Direction::Through(&self.p0), &self.p1)
@@ -269,19 +304,22 @@ pub mod boolean {
                 (CounterClockWise, ClockWise) => {
                     let dir2 =
                         Point::orient_along_direction(&self.p0, Direction::Through(&self.p1), q);
-                    if dir2 == CounterClockWise {
-                        signval
-                    } else {
-                        0.0
+                    match (sign, dir2) {
+                        (CounterClockWise, CounterClockWise) => signval,
+                        _ => 0.0,
+                    }
+                }
+                (ClockWise, CounterClockWise) => {
+                    let dir2 =
+                        Point::orient_along_direction(&self.p0, Direction::Through(&self.p1), q);
+                    match (sign, dir2) {
+                        (ClockWise, ClockWise) => signval,
+                        _ => 0.0,
                     }
                 }
                 _ => 0.0,
             }
         }
-    }
-
-    struct Polygon2 {
-        rings: Vec<Point<f64>>,
     }
 
     #[cfg(test)]
@@ -307,6 +345,40 @@ pub mod boolean {
                 p1: Point::new([2.0, 0.0]),
             };
             assert_eq!(cl.sign(), Orientation::CoLinear);
+        }
+
+        #[test]
+        fn simplex_beta() {
+            let s = Simplex {
+                p0: Point::new([1.0, 0.0]),
+                p1: Point::new([1.0, 1.0]),
+            };
+
+            // original edge
+            assert_eq!(s.beta(&Point::new([0.5, 0.0])), 0.5);
+
+            // inside
+            assert_eq!(s.beta(&Point::new([0.9, 0.5])), 1.0);
+
+            // outside
+            assert_eq!(s.beta(&Point::new([1.1, 0.5])), 0.0);
+        }
+
+        #[test]
+        fn simplex_beta_neg() {
+            let s = Simplex {
+                p0: Point::new([1.0, 1.0]),
+                p1: Point::new([1.0, 0.0]),
+            };
+
+            // original edge
+            assert_eq!(s.beta(&Point::new([0.5, 0.0])), -0.5);
+
+            // inside
+            assert_eq!(s.beta(&Point::new([0.9, 0.5])), -1.0);
+
+            // outside
+            assert_eq!(s.beta(&Point::new([1.1, 0.5])), 0.0);
         }
 
         #[test]
@@ -408,8 +480,26 @@ pub mod boolean {
             let p1 = polygon_cube(Point::new([0.0, 0.0]), 2.0);
             let s1 = SimplicalChain::from_polygon(&p1);
 
-            let s = s0.bool_intersects(&s1);
-            assert_eq!(s.simplices.len(), 4);
+            let sx = s0.bool_intersect(&s1);
+            assert_eq!(sx.simplices.len(), 4);
+            for s in &sx.simplices {
+                assert!(s0.simplices.contains(s));
+            }
+        }
+
+        #[test]
+        fn union_contains() {
+            let p0 = polygon_cube(Point::new([0.0, 0.0]), 1.0);
+            let s0 = SimplicalChain::from_polygon(&p0);
+
+            let p1 = polygon_cube(Point::new([0.0, 0.0]), 2.0);
+            let s1 = SimplicalChain::from_polygon(&p1);
+
+            let sx = s0.bool_union(&s1);
+            assert_eq!(sx.simplices.len(), 4);
+            for s in &sx.simplices {
+                assert!(s1.simplices.contains(s));
+            }
         }
 
         #[test]
@@ -433,7 +523,7 @@ pub mod boolean {
             let p1 = polygon_cube(Point::new([2.0, 0.0]), 1.0);
             let s1 = SimplicalChain::from_polygon(&p1);
 
-            let s = s0.bool_intersects(&s1);
+            let s = s0.bool_intersect(&s1);
             eprintln!("out={:?}", s);
             todo!();
         }
@@ -472,7 +562,7 @@ pub mod boolean {
             let p1 = polygon_cube(Point::new([4.0, 4.0]), 2.0);
             let s1 = SimplicalChain::from_polygon(&p1);
 
-            let sx = s0.bool_intersects(&s1);
+            let sx = s0.bool_intersect(&s1);
 
             let p_expected = polygon_cube(Point::new([3.0, 3.0]), 1.0);
             let sx_expected = SimplicalChain::from_polygon(&p_expected);
@@ -563,6 +653,17 @@ pub mod boolean {
             } else {
                 todo!();
             }
+        }
+
+        #[test]
+        fn test_lerp() {
+            assert_eq!(lerp_f64(1.0, 3.0, 0.0), 1.0);
+            assert_eq!(lerp_f64(1.0, 3.0, 1.0), 3.0);
+
+            assert_eq!(
+                lerp_pf64(&Point::new([0.0, 0.0]), &Point::new([2.0, 2.0]), 0.5),
+                Point::new([1.0, 1.0])
+            );
         }
     }
 }
@@ -681,7 +782,7 @@ impl Rect {
         let p2 = center + rotate(Vector([self.extent[0], self.extent[1]]), self.rot);
         let p3 = center + rotate(Vector([-self.extent[0], self.extent[1]]), self.rot);
 
-        Polygon::new_unchecked(vec![p0, p1, p2, p3])
+        Polygon::new(vec![p0, p1, p2, p3]).unwrap()
     }
 }
 
@@ -1051,6 +1152,7 @@ struct EguiRectOpts {
     render_points: bool,
     render_bb: bool,
     render_polygon: bool,
+    render_union: bool,
     render_rectnet: bool,
     render_net: bool,
 }
@@ -1068,7 +1170,7 @@ struct MyApp {
 }
 
 fn gen_rects(view: f64, count: usize) -> Vec<Rect> {
-    if false {
+    if true {
         let mut rng = thread_rng();
         let mut rects = Vec::new();
         for _ in 0..count {
@@ -1094,6 +1196,7 @@ impl Default for MyApp {
 
         let rects = gen_rects(view, count);
         let opts = EguiRectOpts {
+            render_union: true,
             render_rectnet: true,
             ..EguiRectOpts::default()
         };
@@ -1128,7 +1231,7 @@ impl eframe::App for MyApp {
         }
 
         if !self.pause {
-            // self.t += ctx.input().predicted_dt as f64;
+            self.t += ctx.input().predicted_dt as f64;
             ctx.request_repaint();
         }
 
@@ -1182,6 +1285,26 @@ impl eframe::App for MyApp {
                 .allow_drag(true);
 
             plot.show(ui, |plot_ui| {
+                if self.opts.render_union {
+                    use boolean::*;
+                    let mut sx = SimplicalChain::default();
+                    for r in &rects {
+                        let p = r.rect.polygon();
+                        let sx_r = SimplicalChain::from_polygon(&p);
+                        sx = sx.bool_union(&sx_r);
+                    }
+
+                    for s in sx.simplices {
+                        plot_ui.line(
+                            plot::Line::new(PlotPoints::Owned(vec![
+                                pt_egui(&s.p0),
+                                pt_egui(&s.p1),
+                            ]))
+                            .color(Color32::GREEN),
+                        );
+                    }
+                }
+
                 for r in rects {
                     r.ui(plot_ui, &self.opts);
                 }
