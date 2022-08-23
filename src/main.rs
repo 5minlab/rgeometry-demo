@@ -9,8 +9,11 @@ use eframe::{
     },
     epaint::Color32,
 };
-use rgeometry::data::{DirectedEdge, Point, PointLocation, Polygon, Vector};
 use rgeometry::Intersects;
+use rgeometry::{
+    algorithms::visibility::naive::get_visibility_polygon,
+    data::{DirectedEdge, Point, PointLocation, Polygon, Vector},
+};
 use stopwatch::Stopwatch;
 
 type P = Vector<f64, 2>;
@@ -30,12 +33,12 @@ fn p_rg_to_egui(p: &Polygon<f64>) -> plot::Polygon {
     plot::Polygon::new(points)
 }
 
-fn pt_egui(p: &Point<f64, 2>) -> PlotPoint {
+fn pt_egui(p: &Point<f64>) -> PlotPoint {
     let [x, y] = p.array;
     PlotPoint::new(x, y)
 }
 
-pub fn contains(p: &Polygon<f64>, p0: &Point<f64, 2>) -> bool {
+pub fn contains(p: &Polygon<f64>, p0: &Point<f64>) -> bool {
     if true {
         let p1 = p0 + &Vector([1000., 0.]);
         intersects(p, p0, &p1) % 2 == 0
@@ -47,7 +50,7 @@ pub fn contains(p: &Polygon<f64>, p0: &Point<f64, 2>) -> bool {
     }
 }
 
-pub fn intersects(p: &Polygon<f64>, p0: &Point<f64, 2>, p1: &Point<f64, 2>) -> usize {
+pub fn intersects(p: &Polygon<f64>, p0: &Point<f64>, p1: &Point<f64>) -> usize {
     let ray = DirectedEdge { src: p0, dst: p1 };
     let mut intersections = 0;
     for edge in p.iter_boundary_edges() {
@@ -74,7 +77,7 @@ impl Rect {
         }
     }
 
-    fn from_bb(t: &(Point<f64, 2>, Point<f64, 2>)) -> Self {
+    fn from_bb(t: &(Point<f64>, Point<f64>)) -> Self {
         let (p0, p1) = t;
         Self {
             pos: [
@@ -142,7 +145,7 @@ impl GridPos {
     const fn new(x: i32, y: i32) -> Self {
         Self { x, y }
     }
-    fn center(&self) -> Point<f64, 2> {
+    fn center(&self) -> Point<f64> {
         Point::new([self.x as f64 + 0.5, self.y as f64 + 0.5])
     }
 }
@@ -303,7 +306,7 @@ impl GridArea {
         }
     }
 
-    fn new(t: &(Point<f64, 2>, Point<f64, 2>)) -> Self {
+    fn new(t: &(Point<f64>, Point<f64>)) -> Self {
         let x_min = t.0[0].floor() as i32;
         let x_max = t.1[0].ceil() as i32;
         let y_min = t.0[1].floor() as i32;
