@@ -11,6 +11,17 @@ pub mod boolean {
 
     use super::*;
 
+    fn lerp_f64(v0: f64, v1: f64, t: f64) -> f64 {
+        v0 + (v1 - v0) * t
+    }
+
+    fn lerp_pf64(p0: &Point<f64>, p1: &Point<f64>, t: f64) -> Point<f64> {
+        Point::new([
+            lerp_f64(p0.array[0], p1.array[0], t),
+            lerp_f64(p0.array[1], p1.array[1], t),
+        ])
+    }
+
     #[derive(Debug, PartialEq, Eq)]
     pub struct SimplicalChain {
         simplices: Vec<Simplex>,
@@ -31,7 +42,7 @@ pub mod boolean {
         pub fn characteristic(&self, q: &Point<f64>) -> f64 {
             for simplex in &self.simplices {
                 if simplex.on_non_original_edge(q) {
-                    eprintln!("on-non-original-edge");
+                    // eprintln!("on-non-original-edge");
                     return 1.0;
                 }
             }
@@ -39,13 +50,13 @@ pub mod boolean {
             let mut sum = 0f64;
             for simplex in &self.simplices {
                 let c = simplex.beta(q);
-                eprintln!("c={:?}", c);
+                // eprintln!("c={:?}", c);
                 sum += c;
             }
             return sum;
         }
 
-        pub fn subdivide(&self, other: &SimplicalChain) -> SimplicalChain {
+        fn subdivide(&self, other: &SimplicalChain) -> SimplicalChain {
             let mut simplices = Vec::new();
 
             for s0 in &self.simplices {
@@ -58,7 +69,7 @@ pub mod boolean {
 
                     match l0.intersect(&l1) {
                         Some(ILineSegment::Crossing) => {
-                            eprintln!("crossing, l0={:?}, l1={:?}", l0, l1);
+                            // eprintln!("crossing, l0={:?}, l1={:?}", l0, l1);
                             let line0 = Line::new_through(&s0.p0, &s0.p1);
                             let line1 = Line::new_through(&s1.p0, &s1.p1);
 
@@ -71,7 +82,7 @@ pub mod boolean {
                             }
                         }
                         Some(ILineSegment::Overlap(view)) => {
-                            eprintln!("{:?} / {:?} / {:?}", l0, l1, view);
+                            // eprintln!("{:?} / {:?} / {:?}", l0, l1, view);
                             let p = **view.min.inner();
                             if !intersection_points.contains(&p) {
                                 intersection_points.push(p);
@@ -89,8 +100,77 @@ pub mod boolean {
                 for i in 0..(intersection_points.len() - 1) {
                     let p0 = intersection_points[i];
                     let p1 = intersection_points[i + 1];
-                    eprintln!("{:?} {:?}", p0, p1);
+                    // eprintln!("{:?} {:?}", p0, p1);
                     simplices.push(Simplex { p0, p1 });
+                }
+            }
+
+            SimplicalChain { simplices }
+        }
+
+        pub fn bool_intersects(&self, other: &SimplicalChain) -> SimplicalChain {
+            let sx0 = self;
+            let sx1 = other;
+
+            // subdivide, simplical chain
+            let sx0_subdivide = sx0.subdivide(sx1);
+            let sx1_subdivide = sx1.subdivide(sx0);
+
+            // calculate edge characteristics
+
+            // f(s_i*, P2)
+            let mut ec_sx0 = Vec::with_capacity(sx0_subdivide.simplices.len());
+            ec_sx0.resize(sx0_subdivide.simplices.len(), 0f64);
+
+            // f(u_i*, P1)
+            let mut ec_sx1 = Vec::with_capacity(sx1_subdivide.simplices.len());
+            ec_sx1.resize(sx1_subdivide.simplices.len(), 0f64);
+
+            for (idx0, s) in sx0_subdivide.simplices.iter().enumerate() {
+                if sx1_subdivide.simplices.contains(&s) {
+                    ec_sx0[idx0] = 1.0;
+                    continue;
+                }
+
+                for u in &sx1_subdivide.simplices {
+                    if !sx1_subdivide.simplices.contains(&s.reverse()) {
+                        let q = s.midpoint();
+                        let beta = u.beta(&q);
+                        ec_sx0[idx0] += beta;
+                    }
+                }
+            }
+
+            for (idx1, u) in sx1_subdivide.simplices.iter().enumerate() {
+                for s in &sx0_subdivide.simplices {
+                    let u_in_sx0 = sx0_subdivide.simplices.contains(&u);
+                    let revu_in_sx0 = sx0_subdivide.simplices.contains(&u.reverse());
+
+                    let u_in_f1 = u_in_sx0;
+                    let u_in_f2 = revu_in_sx0;
+
+                    if !u_in_f1 && !u_in_f2 {
+                        let q = u.midpoint();
+                        let beta = s.beta(&q);
+                        ec_sx1[idx1] += beta;
+                    }
+                }
+            }
+
+            eprintln!("sx0: {:?}/{:?}", sx0_subdivide, ec_sx0);
+            eprintln!("sx1: {:?}/{:?}", sx1_subdivide, ec_sx1);
+
+            let mut simplices = Vec::new();
+
+            for (idx, s) in sx0_subdivide.simplices.into_iter().enumerate() {
+                if ec_sx0[idx] == 1.0 {
+                    simplices.push(s);
+                }
+            }
+
+            for (idx, s) in sx1_subdivide.simplices.into_iter().enumerate() {
+                if ec_sx1[idx] == 1.0 {
+                    simplices.push(s);
                 }
             }
 
@@ -105,11 +185,16 @@ pub mod boolean {
         p1: Point<f64>,
     }
 
-    enum SimplexLocation {
-        NonOriginalEdge,
-        OriginalEdge,
-        Inside,
-        Outside,
+    impl Simplex {
+        fn reverse(&self) -> Self {
+            Simplex {
+                p0: self.p1,
+                p1: self.p0,
+            }
+        }
+        fn midpoint(&self) -> Point<f64> {
+            lerp_pf64(&self.p0, &self.p1, 0.5)
+        }
     }
 
     const ORIGIN: Point<f64> = Point::new([0f64, 0f64]);
@@ -150,10 +235,12 @@ pub mod boolean {
             use Orientation::*;
 
             let sign = self.sign();
+            /*
             eprintln!(
                 "characteristic: sign={:?}, q={:?}, self={:?}",
                 q, sign, self
             );
+            */
             let signval = match sign {
                 ClockWise => -1.0,
                 CounterClockWise => 1.0,
@@ -250,17 +337,6 @@ pub mod boolean {
             assert_eq!(s.characteristic(&Point::new([0.5, 0.5])), 0.0);
         }
 
-        fn lerp_f64(v0: f64, v1: f64, t: f64) -> f64 {
-            v0 + (v1 - v0) * t
-        }
-
-        fn lerp(p0: &Point<f64>, p1: &Point<f64>, t: f64) -> Point<f64> {
-            Point::new([
-                lerp_f64(p0.array[0], p1.array[0], t),
-                lerp_f64(p0.array[1], p1.array[1], t),
-            ])
-        }
-
         fn points_along(
             src: &Point<f64>,
             dst: &Point<f64>,
@@ -269,7 +345,7 @@ pub mod boolean {
         ) {
             for i in 0..subdivide {
                 let t = ((i + 1) as f64) / (subdivide as f64);
-                out.push(lerp(src, dst, t));
+                out.push(lerp_pf64(src, dst, t));
             }
         }
 
@@ -325,6 +401,18 @@ pub mod boolean {
         }
 
         #[test]
+        fn intersects_contains() {
+            let p0 = polygon_cube(Point::new([0.0, 0.0]), 1.0);
+            let s0 = SimplicalChain::from_polygon(&p0);
+
+            let p1 = polygon_cube(Point::new([0.0, 0.0]), 2.0);
+            let s1 = SimplicalChain::from_polygon(&p1);
+
+            let s = s0.bool_intersects(&s1);
+            assert_eq!(s.simplices.len(), 4);
+        }
+
+        #[test]
         fn subdivide_exact_edge() {
             let p0 = polygon_cube(Point::new([0.0, 0.0]), 1.0);
             let s0 = SimplicalChain::from_polygon(&p0);
@@ -334,6 +422,20 @@ pub mod boolean {
 
             let subdivide = s0.subdivide(&s1);
             assert_eq!(subdivide, s0);
+        }
+
+        #[ignore]
+        #[test]
+        fn intersect_exact_edge() {
+            let p0 = polygon_cube(Point::new([0.0, 0.0]), 1.0);
+            let s0 = SimplicalChain::from_polygon(&p0);
+
+            let p1 = polygon_cube(Point::new([2.0, 0.0]), 1.0);
+            let s1 = SimplicalChain::from_polygon(&p1);
+
+            let s = s0.bool_intersects(&s1);
+            eprintln!("out={:?}", s);
+            todo!();
         }
 
         // TODO: fix test with signed zero
@@ -360,6 +462,26 @@ pub mod boolean {
 
             let subdivide = s0.subdivide(&s1);
             assert_eq!(subdivide.simplices.len(), 6);
+        }
+
+        #[test]
+        fn intersect_basic() {
+            let p0 = polygon_cube(Point::new([2.0, 2.0]), 2.0);
+            let s0 = SimplicalChain::from_polygon(&p0);
+
+            let p1 = polygon_cube(Point::new([4.0, 4.0]), 2.0);
+            let s1 = SimplicalChain::from_polygon(&p1);
+
+            let sx = s0.bool_intersects(&s1);
+
+            let p_expected = polygon_cube(Point::new([3.0, 3.0]), 1.0);
+            let sx_expected = SimplicalChain::from_polygon(&p_expected);
+
+            assert_eq!(sx.simplices.len(), sx_expected.simplices.len());
+
+            for s in sx_expected.simplices {
+                assert!(sx.simplices.contains(&s));
+            }
         }
 
         #[test]
