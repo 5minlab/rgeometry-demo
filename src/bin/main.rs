@@ -1,6 +1,450 @@
 use rand::{thread_rng, Rng};
 use std::f64::consts::SQRT_2;
 
+// https://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.83.6811&rep=rep1&type=pdf
+pub mod boolean {
+    use rgeometry::{
+        data::{Direction, EndPoint, ILineSegment, Line, LineSegment},
+        Orientation,
+    };
+    use std::cmp::Ordering;
+
+    use super::*;
+
+    #[derive(Debug, PartialEq, Eq)]
+    pub struct SimplicalChain {
+        simplices: Vec<Simplex>,
+    }
+
+    impl SimplicalChain {
+        pub fn from_polygon(p: &Polygon<f64>) -> Self {
+            let simplices = p
+                .iter_boundary_edges()
+                .map(|e| Simplex {
+                    p0: e.src.clone(),
+                    p1: e.dst.clone(),
+                })
+                .collect::<Vec<_>>();
+            Self { simplices }
+        }
+
+        pub fn characteristic(&self, q: &Point<f64>) -> f64 {
+            for simplex in &self.simplices {
+                if simplex.on_non_original_edge(q) {
+                    eprintln!("on-non-original-edge");
+                    return 1.0;
+                }
+            }
+
+            let mut sum = 0f64;
+            for simplex in &self.simplices {
+                let c = simplex.beta(q);
+                eprintln!("c={:?}", c);
+                sum += c;
+            }
+            return sum;
+        }
+
+        pub fn subdivide(&self, other: &SimplicalChain) -> SimplicalChain {
+            let mut simplices = Vec::new();
+
+            for s0 in &self.simplices {
+                let l0 = LineSegment::new(EndPoint::Inclusive(s0.p0), EndPoint::Inclusive(s0.p1));
+                let mut intersection_points = vec![s0.p0, s0.p1];
+
+                for s1 in &other.simplices {
+                    let l1 =
+                        LineSegment::new(EndPoint::Inclusive(s1.p0), EndPoint::Inclusive(s1.p1));
+
+                    match l0.intersect(&l1) {
+                        Some(ILineSegment::Crossing) => {
+                            eprintln!("crossing, l0={:?}, l1={:?}", l0, l1);
+                            let line0 = Line::new_through(&s0.p0, &s0.p1);
+                            let line1 = Line::new_through(&s1.p0, &s1.p1);
+
+                            if let Some(p) = line0.intersection_point(&line1) {
+                                if !intersection_points.contains(&p)
+                                    && Ordering::Less == s0.p0.cmp_distance_to(&p, &s0.p1)
+                                {
+                                    intersection_points.push(p);
+                                }
+                            }
+                        }
+                        Some(ILineSegment::Overlap(view)) => {
+                            eprintln!("{:?} / {:?} / {:?}", l0, l1, view);
+                            let p = **view.min.inner();
+                            if !intersection_points.contains(&p) {
+                                intersection_points.push(p);
+                            }
+                            let p = **view.max.inner();
+                            if !intersection_points.contains(&p) {
+                                intersection_points.push(p);
+                            }
+                        }
+                        _ => (),
+                    }
+                }
+
+                intersection_points.sort_by(|a, b| s0.p0.cmp_distance_to(a, b));
+                for i in 0..(intersection_points.len() - 1) {
+                    let p0 = intersection_points[i];
+                    let p1 = intersection_points[i + 1];
+                    eprintln!("{:?} {:?}", p0, p1);
+                    simplices.push(Simplex { p0, p1 });
+                }
+            }
+
+            SimplicalChain { simplices }
+        }
+    }
+
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    struct Simplex {
+        // omit original point
+        p0: Point<f64>,
+        p1: Point<f64>,
+    }
+
+    enum SimplexLocation {
+        NonOriginalEdge,
+        OriginalEdge,
+        Inside,
+        Outside,
+    }
+
+    const ORIGIN: Point<f64> = Point::new([0f64, 0f64]);
+
+    impl Simplex {
+        // clockwise = 1
+        // counterclockwise = -1
+        // colinear = 0
+        fn sign(&self) -> Orientation {
+            Point::orient_along_direction(&ORIGIN, Direction::Through(&self.p0), &self.p1)
+        }
+
+        fn on_non_original_edge(&self, q: &Point<f64>) -> bool {
+            use std::cmp::Ordering::*;
+            use Orientation::*;
+
+            let dir2 = Point::orient_along_direction(&self.p0, Direction::Through(&self.p1), q);
+            match dir2 {
+                CoLinear => {
+                    // given point might be on non-original edge
+                    let cmp_0 = self.p0.cmp_distance_to(q, &self.p1);
+                    let cmp_1 = self.p1.cmp_distance_to(q, &self.p0);
+
+                    match (cmp_0, cmp_1) {
+                        (Greater, _) => false,
+                        (_, Greater) => false,
+                        // p is on non-original edge
+                        _ => true,
+                    }
+                }
+                _ => false,
+            }
+        }
+
+        // assume that p is not on non-original edge of the simplex
+        fn beta(&self, q: &Point<f64>) -> f64 {
+            use std::cmp::Ordering::*;
+            use Orientation::*;
+
+            let sign = self.sign();
+            eprintln!(
+                "characteristic: sign={:?}, q={:?}, self={:?}",
+                q, sign, self
+            );
+            let signval = match sign {
+                ClockWise => -1.0,
+                CounterClockWise => 1.0,
+                CoLinear => 0.0,
+            };
+
+            let dir0 = Point::orient_along_direction(&ORIGIN, Direction::Through(&self.p0), q);
+            let dir1 = Point::orient_along_direction(&ORIGIN, Direction::Through(&self.p1), q);
+
+            match (dir0, dir1) {
+                // Q is on some original edge
+                (CoLinear, _) => {
+                    if dir0 == CoLinear && ORIGIN.cmp_distance_to(q, &self.p0) != Greater {
+                        signval / 2.0
+                    } else {
+                        0.0
+                    }
+                }
+                (_, CoLinear) => {
+                    if dir1 == CoLinear && ORIGIN.cmp_distance_to(q, &self.p1) != Greater {
+                        signval / 2.0
+                    } else {
+                        0.0
+                    }
+                }
+                (CounterClockWise, ClockWise) => {
+                    let dir2 =
+                        Point::orient_along_direction(&self.p0, Direction::Through(&self.p1), q);
+                    if dir2 == CounterClockWise {
+                        signval
+                    } else {
+                        0.0
+                    }
+                }
+                _ => 0.0,
+            }
+        }
+    }
+
+    struct Polygon2 {
+        rings: Vec<Point<f64>>,
+    }
+
+    #[cfg(test)]
+    mod test {
+        use super::*;
+
+        #[test]
+        fn simplex_sign() {
+            let ccw = Simplex {
+                p0: Point::new([1.0, 0.0]),
+                p1: Point::new([1.0, 1.0]),
+            };
+            assert_eq!(ccw.sign(), Orientation::CounterClockWise);
+
+            let cw = Simplex {
+                p0: Point::new([1.0, 1.0]),
+                p1: Point::new([1.0, 0.0]),
+            };
+            assert_eq!(cw.sign(), Orientation::ClockWise);
+
+            let cl = Simplex {
+                p0: Point::new([1.0, 0.0]),
+                p1: Point::new([2.0, 0.0]),
+            };
+            assert_eq!(cl.sign(), Orientation::CoLinear);
+        }
+
+        #[test]
+        fn characteristic0() {
+            let p = Polygon::new(vec![
+                Point::new([1.0, 1.0]),
+                Point::new([4.0, 1.0]),
+                Point::new([1.0, 4.0]),
+            ])
+            .unwrap();
+
+            let s = SimplicalChain::from_polygon(&p);
+            eprintln!("{:?}", s);
+
+            // on non-original edge, middle
+            assert_eq!(s.characteristic(&Point::new([2.5, 2.5])), 1.0);
+
+            // on non-original edge, src
+            assert_eq!(s.characteristic(&Point::new([4.0, 1.0])), 1.0);
+
+            // on non-original edge, dst
+            assert_eq!(s.characteristic(&Point::new([1.0, 4.0])), 1.0);
+
+            // inside of open region
+            assert_eq!(s.characteristic(&Point::new([2.0, 2.0])), 1.0);
+
+            // outside
+            assert_eq!(s.characteristic(&Point::new([0.5, 0.5])), 0.0);
+        }
+
+        fn lerp_f64(v0: f64, v1: f64, t: f64) -> f64 {
+            v0 + (v1 - v0) * t
+        }
+
+        fn lerp(p0: &Point<f64>, p1: &Point<f64>, t: f64) -> Point<f64> {
+            Point::new([
+                lerp_f64(p0.array[0], p1.array[0], t),
+                lerp_f64(p0.array[1], p1.array[1], t),
+            ])
+        }
+
+        fn points_along(
+            src: &Point<f64>,
+            dst: &Point<f64>,
+            subdivide: usize,
+            out: &mut Vec<Point<f64>>,
+        ) {
+            for i in 0..subdivide {
+                let t = ((i + 1) as f64) / (subdivide as f64);
+                out.push(lerp(src, dst, t));
+            }
+        }
+
+        fn polygon_cube_subdivide(pos: Point<f64>, extent: f64, subdivide: usize) -> Polygon<f64> {
+            let mut points = Vec::new();
+
+            let p0 = pos + Vector([-extent, -extent]);
+            let p1 = pos + Vector([extent, -extent]);
+            let p2 = pos + Vector([extent, extent]);
+            let p3 = pos + Vector([-extent, extent]);
+
+            points_along(&p3, &p0, subdivide, &mut points);
+            points_along(&p0, &p1, subdivide, &mut points);
+            points_along(&p1, &p2, subdivide, &mut points);
+            points_along(&p2, &p3, subdivide, &mut points);
+
+            Polygon::new(points).expect("polygon_cube_subdivide")
+        }
+
+        fn polygon_cube(pos: Point<f64>, extent: f64) -> Polygon<f64> {
+            let p0 = pos + Vector([-extent, -extent]);
+            let p1 = pos + Vector([extent, -extent]);
+            let p2 = pos + Vector([extent, extent]);
+            let p3 = pos + Vector([-extent, extent]);
+
+            Polygon::new(vec![p0, p1, p2, p3]).expect("polygon_cube")
+        }
+
+        #[test]
+        fn test_polygon_cube() {
+            let p = Point::new([0.0, 0.0]);
+            let extent = 1.0;
+
+            let c0 = polygon_cube(p, extent);
+            let c1 = polygon_cube_subdivide(p, extent, 1);
+
+            let p0 = c0.iter().collect::<Vec<_>>();
+            let p1 = c1.iter().collect::<Vec<_>>();
+
+            assert_eq!(p0, p1);
+        }
+
+        #[test]
+        fn subdivide_nonoverlapping() {
+            let p0 = polygon_cube(Point::new([0.0, 0.0]), 1.0);
+            let s0 = SimplicalChain::from_polygon(&p0);
+
+            let p1 = polygon_cube(Point::new([0.0, 0.0]), 2.0);
+            let s1 = SimplicalChain::from_polygon(&p1);
+
+            let subdivide = s0.subdivide(&s1);
+            assert_eq!(subdivide, s0);
+        }
+
+        #[test]
+        fn subdivide_exact_edge() {
+            let p0 = polygon_cube(Point::new([0.0, 0.0]), 1.0);
+            let s0 = SimplicalChain::from_polygon(&p0);
+
+            let p1 = polygon_cube(Point::new([2.0, 0.0]), 1.0);
+            let s1 = SimplicalChain::from_polygon(&p1);
+
+            let subdivide = s0.subdivide(&s1);
+            assert_eq!(subdivide, s0);
+        }
+
+        // TODO: fix test with signed zero
+        #[test]
+        #[ignore]
+        fn subdivide_exact_overlap_zerosign() {
+            let p0 = polygon_cube(Point::new([1.0, 0.0]), 1.0);
+            let s0 = SimplicalChain::from_polygon(&p0);
+
+            let p1 = polygon_cube(Point::new([2.0, 0.0]), 1.0);
+            let s1 = SimplicalChain::from_polygon(&p1);
+
+            let subdivide = s0.subdivide(&s1);
+            assert_eq!(subdivide.simplices.len(), 6);
+        }
+
+        #[test]
+        fn subdivide_exact_overlap() {
+            let p0 = polygon_cube(Point::new([1.0, 0.0]), 1.0);
+            let s0 = SimplicalChain::from_polygon(&p0);
+
+            let p1 = polygon_cube(Point::new([2.0, 0.0]), 1.0);
+            let s1 = SimplicalChain::from_polygon(&p1);
+
+            let subdivide = s0.subdivide(&s1);
+            assert_eq!(subdivide.simplices.len(), 6);
+        }
+
+        #[test]
+        fn subdivide_exact_overlap_partialedge() {
+            let p0 = polygon_cube(Point::new([0.0, 0.0]), 1.0);
+            let s0 = SimplicalChain::from_polygon(&p0);
+
+            let p1 = polygon_cube(Point::new([2.0, 0.5]), 1.0);
+            let s1 = SimplicalChain::from_polygon(&p1);
+
+            let subdivide = s0.subdivide(&s1);
+            assert_eq!(subdivide.simplices.len(), 5);
+        }
+
+        #[test]
+        fn subdivide_exact_overlap_multisplit_partial_small() {
+            let p0 = polygon_cube(Point::new([0.0, 0.0]), 3.0);
+            let s0 = SimplicalChain::from_polygon(&p0);
+
+            let p1 = polygon_cube_subdivide(Point::new([4.0, 0.0]), 1.0, 3);
+            let s1 = SimplicalChain::from_polygon(&p1);
+
+            let subdivide = s0.subdivide(&s1);
+            assert_eq!(subdivide.simplices.len(), 9);
+        }
+
+        #[test]
+        fn subdivide_exact_overlap_multisplit_partial_large() {
+            let p0 = polygon_cube(Point::new([0.0, 0.0]), 3.0);
+            let s0 = SimplicalChain::from_polygon(&p0);
+
+            let p1 = polygon_cube_subdivide(Point::new([7.0, 0.0]), 4.0, 3);
+            let s1 = SimplicalChain::from_polygon(&p1);
+
+            let subdivide = s0.subdivide(&s1);
+            eprintln!("{:?}", subdivide);
+            assert_eq!(subdivide.simplices.len(), 6);
+        }
+
+        #[test]
+        fn subdivide_exact_overlap_multisplit_full() {
+            let p0 = polygon_cube(Point::new([0.0, 0.0]), 3.0);
+            let s0 = SimplicalChain::from_polygon(&p0);
+
+            let p1 = polygon_cube_subdivide(Point::new([6.0, 0.0]), 3.0, 3);
+            let s1 = SimplicalChain::from_polygon(&p1);
+
+            let subdivide = s0.subdivide(&s1);
+            assert_eq!(subdivide.simplices.len(), 6);
+        }
+
+        #[ignore]
+        #[test]
+        fn test_crossing() {
+            let p0 = Point::new([-3.0, -3.0]);
+            let p1 = Point::new([3.0, -3.0]);
+
+            let p2 = Point::new([3.0, -4.0]);
+            let p3 = Point::new([3.0, -1.333333333333333]);
+
+            let l0 = LineSegment::new(EndPoint::Inclusive(p0), EndPoint::Inclusive(p1));
+            let l1 = LineSegment::new(EndPoint::Inclusive(p2), EndPoint::Inclusive(p3));
+
+            assert_eq!(Some(ILineSegment::Crossing), l0.intersect(&l1));
+
+            let l0 = Line::new_through(&p0, &p1);
+            let l1 = Line::new_through(&p2, &p3);
+
+            let res = l0.intersection_point(&l1);
+            if let Some(p) = res {
+                // invariant: distance?
+                assert_ne!(p0.cmp_distance_to(&p, &p1), std::cmp::Ordering::Greater);
+
+                // invariant: colinear?
+                assert_eq!(
+                    Orientation::CoLinear,
+                    Point::orient_along_direction(&p0, Direction::Through(&p1), &p)
+                );
+            } else {
+                todo!();
+            }
+        }
+    }
+}
+
 use eframe::{
     egui::{
         self,
@@ -9,11 +453,8 @@ use eframe::{
     },
     epaint::Color32,
 };
+use rgeometry::data::{DirectedEdge, Point, PointLocation, Polygon, Vector};
 use rgeometry::Intersects;
-use rgeometry::{
-    algorithms::visibility::naive::get_visibility_polygon,
-    data::{DirectedEdge, Point, PointLocation, Polygon, Vector},
-};
 use stopwatch::Stopwatch;
 
 type P = Vector<f64, 2>;
@@ -505,24 +946,28 @@ struct MyApp {
 }
 
 fn gen_rects(view: f64, count: usize) -> Vec<Rect> {
-    let mut rng = thread_rng();
-    let mut rects = Vec::new();
-    for _ in 0..count {
-        let w = rng.gen_range(3.0..6.0);
-        let h = rng.gen_range(0.1..3.0);
+    if false {
+        let mut rng = thread_rng();
+        let mut rects = Vec::new();
+        for _ in 0..count {
+            let w = rng.gen_range(3.0..6.0);
+            let h = rng.gen_range(0.1..3.0);
 
-        let inner = view - (w + h) - 2.0;
-        let x = rng.gen_range(-inner..inner);
-        let y = rng.gen_range(-inner..inner);
+            let inner = view - (w + h) - 2.0;
+            let x = rng.gen_range(-inner..inner);
+            let y = rng.gen_range(-inner..inner);
 
-        rects.push(Rect::new(w, h).pos(x, y));
+            rects.push(Rect::new(w, h).pos(x, y));
+        }
+        rects
+    } else {
+        vec![Rect::new(10.0, 3.0)]
     }
-    rects
 }
 
 impl Default for MyApp {
     fn default() -> Self {
-        let view = 50f64;
+        let view = 30f64;
         let count = 100;
 
         let rects = gen_rects(view, count);
@@ -561,7 +1006,7 @@ impl eframe::App for MyApp {
         }
 
         if !self.pause {
-            self.t += ctx.input().predicted_dt as f64;
+            // self.t += ctx.input().predicted_dt as f64;
             ctx.request_repaint();
         }
 

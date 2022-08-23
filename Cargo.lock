@@ -1428,8 +1428,6 @@ dependencies = [
 [[package]]
 name = "rgeometry"
 version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5623a84523476c3d97a3d8f23b297f92fac4d3d00e6f0ab249393019b77789e5"
 dependencies = [
  "array-init",
  "claim",
