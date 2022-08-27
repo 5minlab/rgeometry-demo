@@ -1,11 +1,6 @@
-use super::{gen_rects, p_rg_to_egui, pt_egui, Demo, Rect};
+use super::{gen_rects, p_rg_to_egui, plot_line, Demo, Rect};
 use crate::boolean::*;
-use eframe::egui::{
-    self,
-    epaint::Color32,
-    plot::{self, *},
-    Ui,
-};
+use eframe::egui::{self, epaint::Color32, plot::*, Ui};
 
 pub struct DemoBoolean {
     opt_render_rect: bool,
@@ -78,10 +73,7 @@ impl Demo for DemoBoolean {
 
         if self.opt_render_union {
             for s in &self.sx.simplices {
-                plot_ui.line(
-                    plot::Line::new(PlotPoints::Owned(vec![pt_egui(&s.src), pt_egui(&s.dst)]))
-                        .color(Color32::GREEN),
-                );
+                plot_line(plot_ui, &[&s.src, &s.dst], Color32::GREEN);
             }
         }
     }

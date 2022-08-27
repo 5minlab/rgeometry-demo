@@ -1,4 +1,4 @@
-use super::{gen_rects, p_rg_to_egui, pt_egui, Demo, Rect};
+use super::{gen_rects, p_rg_to_egui, plot_line, pt_egui, Demo, Rect};
 use eframe::egui::{
     self,
     epaint::Color32,
@@ -172,10 +172,7 @@ impl GridNet {
                     let p0 = center + &HEX_VECS[i as usize];
                     let p1 = center + &HEX_VECS[(i + 1) as usize];
 
-                    plot_ui.line(
-                        plot::Line::new(PlotPoints::Owned(vec![pt_egui(&p0), pt_egui(&p1)]))
-                            .color(Color32::BROWN),
-                    );
+                    plot_line(plot_ui, &[&p0, &p1], Color32::BROWN);
 
                     /*
                     let dir = &VECS[i as usize];

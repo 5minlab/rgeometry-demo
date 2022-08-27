@@ -14,6 +14,11 @@ mod boolean;
 mod delaunay;
 mod gridnet;
 
+pub fn plot_line(plot_ui: &mut PlotUi, points: &[&Point<f64>], color: Color32) {
+    let e_points = points.iter().map(|p| pt_egui(p)).collect();
+    plot_ui.line(plot::Line::new(PlotPoints::Owned(e_points)).color(color));
+}
+
 type P = Vector<f64, 2>;
 
 fn rotate(p: P, rot: f64) -> P {

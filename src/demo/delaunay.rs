@@ -1,4 +1,4 @@
-use super::{pt_egui, Demo};
+use super::{plot_line, pt_egui, Demo};
 use crate::delaunay::*;
 use eframe::egui::{
     self,
@@ -41,7 +41,7 @@ fn gen_delaunay(view: f64, points: &[Point<f64>], reductions: usize) -> (Triangu
 
 pub struct DemoDelaunay {
     view: f64,
-    opt_render_outer_tri: bool,
+    opt_render_supertri: bool,
 
     reductions: usize,
     reductions_max: usize,
@@ -56,12 +56,33 @@ impl DemoDelaunay {
 
         Self {
             view,
-            opt_render_outer_tri: false,
+            opt_render_supertri: false,
             reductions,
             reductions_max: reductions,
             points,
             net,
         }
+    }
+}
+
+fn plot_net(net: &TriangularNetwork, plot_ui: &mut PlotUi, render_supertri: bool) {
+    for (_t_idx, t) in net.triangles.iter().enumerate() {
+        /*
+        let t_idx = TriIdx(t_idx);
+        if let Some(_) = v.cut_triangles.iter().find(|t0| **t0 == t_idx) {
+            continue;
+        }
+        */
+
+        let [v0, v1, v2] = t.vertices;
+        let p0 = net.vert(v0);
+        let p1 = net.vert(v1);
+        let p2 = net.vert(v2);
+        if !render_supertri && (is_super(v0) || is_super(v1) || is_super(v2)) {
+            continue;
+        }
+
+        plot_line(plot_ui, &[p0, p1, p2, p0], Color32::GREEN);
     }
 }
 
@@ -76,7 +97,7 @@ impl Demo for DemoDelaunay {
             regen = true;
         }
         if ctx.input().key_pressed(Key::F) {
-            self.opt_render_outer_tri = !self.opt_render_outer_tri;
+            self.opt_render_supertri = !self.opt_render_supertri;
         }
 
         let r = self.reductions;
@@ -88,7 +109,7 @@ impl Demo for DemoDelaunay {
         }
 
         ui.horizontal(|ui| {
-            ui.checkbox(&mut self.opt_render_outer_tri, "render super");
+            ui.checkbox(&mut self.opt_render_supertri, "render super");
             ui.separator();
             if ui.button("regenerate").clicked() {
                 regen = true;
@@ -120,59 +141,24 @@ impl Demo for DemoDelaunay {
 
         let v = net.cut(VertIdx(3), VertIdx(self.net.vertices.len() - 1));
 
-        for (t_idx, t) in net.triangles.iter().enumerate() {
-            let t_idx = TriIdx(t_idx);
-            if let Some(_) = v.cut_triangles.iter().find(|t0| **t0 == t_idx) {
-                continue;
-            }
-
-            let [v0, v1, v2] = t.vertices;
-            let p0 = net.vert(v0);
-            let p1 = net.vert(v1);
-            let p2 = net.vert(v2);
-            if !self.opt_render_outer_tri && (is_super(v0) || is_super(v1) || is_super(v2)) {
-                continue;
-            }
-
-            plot_ui.line(
-                plot::Line::new(PlotPoints::Owned(vec![
-                    pt_egui(&p0),
-                    pt_egui(&p1),
-                    pt_egui(&p2),
-                    pt_egui(&p0),
-                ]))
-                .color(Color32::GREEN),
-            );
-        }
+        plot_net(net, plot_ui, self.opt_render_supertri);
 
         for (from, to) in v.cuts {
-            let v_from = net.vert(from);
-            let v_to = net.vert(to);
-
-            plot_ui.line(
-                plot::Line::new(PlotPoints::Owned(vec![pt_egui(&v_from), pt_egui(&v_to)]))
-                    .color(Color32::RED),
-            );
+            let p_from = net.vert(from);
+            let p_to = net.vert(to);
+            plot_line(plot_ui, &[p_from, p_to], Color32::RED);
         }
 
         for (t_idx, idx) in v.contour_ccw {
             let p_from = net.tri_vert(t_idx, idx.cw());
             let p_to = net.tri_vert(t_idx, idx);
-
-            plot_ui.line(
-                plot::Line::new(PlotPoints::Owned(vec![pt_egui(&p_from), pt_egui(&p_to)]))
-                    .color(Color32::BLUE),
-            );
+            plot_line(plot_ui, &[p_from, p_to], Color32::BLUE);
         }
 
         for (t_idx, idx) in v.contour_cw {
             let p_from = net.tri_vert(t_idx, idx.cw());
             let p_to = net.tri_vert(t_idx, idx);
-
-            plot_ui.line(
-                plot::Line::new(PlotPoints::Owned(vec![pt_egui(&p_from), pt_egui(&p_to)]))
-                    .color(Color32::YELLOW),
-            );
+            plot_line(plot_ui, &[p_from, p_to], Color32::YELLOW);
         }
 
         plot_ui.points(plot::Points::new(PlotPoints::Owned(
