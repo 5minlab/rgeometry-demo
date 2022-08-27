@@ -1,4 +1,4 @@
-use super::{plot_line, pt_egui, rotate, Demo};
+use super::{plot_line, plot_net, pt_egui, rotate, Demo};
 use crate::delaunay::*;
 use eframe::egui::{
     self,
@@ -83,19 +83,20 @@ impl DemoCDT {
             net,
         }
     }
-}
 
-fn plot_net(net: &TriangularNetwork, plot_ui: &mut PlotUi, render_supertri: bool) {
-    for (_t_idx, t) in net.triangles.iter().enumerate() {
-        let [v0, v1, v2] = t.vertices;
-        let p0 = net.vert(v0);
-        let p1 = net.vert(v1);
-        let p2 = net.vert(v2);
-        if !render_supertri && (is_super(v0) || is_super(v1) || is_super(v2)) {
-            continue;
+    fn constraint(&mut self) {
+        let net = &mut self.net;
+        let len = self.points_constrained.len();
+        for i in 0..len {
+            let p0 = VertIdx(3 + i);
+            let p1 = VertIdx(3 + (i + 1) % len);
+
+            let cut = net.cut(p0, p1);
+            if cut.cuts.is_empty() {
+                continue;
+            }
+            net.cut_restore(&cut);
         }
-
-        plot_line(plot_ui, &[p0, p1, p2, p0], Color32::GREEN);
     }
 }
 
@@ -113,25 +114,17 @@ impl Demo for DemoCDT {
             self.opt_render_supertri = !self.opt_render_supertri;
         }
         if ctx.input().key_pressed(Key::G) {
-            let net = &mut self.net;
-            let len = self.points_constrained.len();
-            for i in 0..len {
-                let p0 = VertIdx(3 + i);
-                let p1 = VertIdx(3 + (i + 1) % len);
-
-                let cut = net.cut(p0, p1);
-                if cut.cuts.is_empty() {
-                    continue;
-                }
-                net.cut_restore(&cut);
-            }
+            self.constraint();
         }
 
         ui.horizontal(|ui| {
             ui.checkbox(&mut self.opt_render_supertri, "render super");
-            ui.separator();
             if ui.button("regenerate").clicked() {
                 regen = true;
+            }
+            ui.separator();
+            if ui.button("force constraint").clicked() {
+                self.constraint();
             }
         });
         ui.label("shortcuts: (D) Regenerate | (F) Toggle supertriangles | (G) Constraint");
@@ -146,6 +139,15 @@ impl Demo for DemoCDT {
         let net = &self.net;
 
         plot_net(net, plot_ui, self.opt_render_supertri);
+
+        let l = self.points_constrained.len();
+        for i in 0..l {
+            let idx0 = VertIdx(3 + i);
+            let idx1 = VertIdx(3 + (i + 1) % l);
+            let p0 = net.vert(idx0);
+            let p1 = net.vert(idx1);
+            plot_line(plot_ui, &[p0, p1], Color32::RED);
+        }
 
         plot_ui.points(plot::Points::new(PlotPoints::Owned(
             net.vertices.iter().skip(3).map(|v| pt_egui(v)).collect(),

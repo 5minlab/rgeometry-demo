@@ -1,4 +1,4 @@
-use super::{plot_line, pt_egui, Demo};
+use super::{plot_line, plot_net, pt_egui, Demo};
 use crate::delaunay::*;
 use eframe::egui::{
     self,
@@ -66,27 +66,6 @@ impl DemoDelaunay {
             cut: None,
             net,
         }
-    }
-}
-
-fn plot_net(net: &TriangularNetwork, plot_ui: &mut PlotUi, render_supertri: bool) {
-    for (_t_idx, t) in net.triangles.iter().enumerate() {
-        /*
-        let t_idx = TriIdx(t_idx);
-        if let Some(_) = v.cut_triangles.iter().find(|t0| **t0 == t_idx) {
-            continue;
-        }
-        */
-
-        let [v0, v1, v2] = t.vertices;
-        let p0 = net.vert(v0);
-        let p1 = net.vert(v1);
-        let p2 = net.vert(v2);
-        if !render_supertri && (is_super(v0) || is_super(v1) || is_super(v2)) {
-            continue;
-        }
-
-        plot_line(plot_ui, &[p0, p1, p2, p0], Color32::GREEN);
     }
 }
 

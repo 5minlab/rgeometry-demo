@@ -1,3 +1,4 @@
+use crate::delaunay::{is_super, TriangularNetwork};
 use rand::{thread_rng, Rng};
 
 use eframe::{
@@ -18,6 +19,20 @@ mod gridnet;
 pub fn plot_line(plot_ui: &mut PlotUi, points: &[&Point<f64>], color: Color32) {
     let e_points = points.iter().map(|p| pt_egui(p)).collect();
     plot_ui.line(plot::Line::new(PlotPoints::Owned(e_points)).color(color));
+}
+
+fn plot_net(net: &TriangularNetwork, plot_ui: &mut PlotUi, render_supertri: bool) {
+    for (_t_idx, t) in net.triangles.iter().enumerate() {
+        let [v0, v1, v2] = t.vertices;
+        let p0 = net.vert(v0);
+        let p1 = net.vert(v1);
+        let p2 = net.vert(v2);
+        if !render_supertri && (is_super(v0) || is_super(v1) || is_super(v2)) {
+            continue;
+        }
+
+        plot_line(plot_ui, &[p0, p1, p2, p0], Color32::GREEN);
+    }
 }
 
 type P = Vector<f64, 2>;
