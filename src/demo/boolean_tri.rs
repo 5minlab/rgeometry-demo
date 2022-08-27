@@ -1,6 +1,7 @@
-use super::{gen_rects, p_rg_to_egui, plot_line, plot_net, Demo, Rect};
+use super::{gen_rects, p_rg_to_egui, plot_line, plot_net, pt_mean, Demo, Rect};
 use crate::boolean::*;
-use crate::demo::TriangularNetwork;
+use crate::delaunay::VertIdx;
+use crate::demo::{is_super, TriangularNetwork};
 use eframe::egui::{self, epaint::Color32, plot::*, Ui};
 use rgeometry::data::Point;
 
@@ -14,7 +15,7 @@ fn rect_union(rects: &[Rect]) -> SimplicalChain {
     sx
 }
 
-fn build_net(view: f64, sx: &SimplicalChain) -> TriangularNetwork {
+fn build_net(view: f64, sx: &SimplicalChain, cut: bool) -> TriangularNetwork {
     let v = view * 4.0;
     let mut net = TriangularNetwork::new(
         Point::new([-v, -v]),
@@ -29,12 +30,50 @@ fn build_net(view: f64, sx: &SimplicalChain) -> TriangularNetwork {
             return net;
         }
     }
+
+    if cut {
+        for s in &sx.simplices {
+            let idx0 = net.vertices.iter().position(|p| *p == s.src).unwrap();
+            let idx1 = net.vertices.iter().position(|p| *p == s.dst).unwrap();
+
+            let cut = net.cut(VertIdx(idx0), VertIdx(idx1));
+            if let Err(e) = net.cut_restore(&cut) {
+                eprintln!("failed to cut: {:?}", e);
+            }
+        }
+    }
+
     net
+}
+
+fn plot_net_inner(
+    sx: &SimplicalChain,
+    net: &TriangularNetwork,
+    plot_ui: &mut PlotUi,
+    render_supertri: bool,
+) {
+    for (_t_idx, t) in net.triangles.iter().enumerate() {
+        let [v0, v1, v2] = t.vertices;
+        let p0 = net.vert(v0);
+        let p1 = net.vert(v1);
+        let p2 = net.vert(v2);
+        if !render_supertri && (is_super(v0) || is_super(v1) || is_super(v2)) {
+            continue;
+        }
+        let center = pt_mean(&[p0, p1, p2]);
+
+        if sx.characteristic(&center) != 1.0 {
+            continue;
+        }
+
+        plot_line(plot_ui, &[p0, p1, p2, p0], Color32::GREEN);
+    }
 }
 
 pub struct DemoBooleanTri {
     opt_render_rect: bool,
     opt_render_union: bool,
+    opt_cut: bool,
 
     view: f64,
 
@@ -47,11 +86,13 @@ impl DemoBooleanTri {
     pub fn new(view: f64) -> Self {
         let rects = gen_rects(view, 100);
         let sx = rect_union(&rects);
-        let net = build_net(view, &sx);
+        let opt_cut = false;
+        let net = build_net(view, &sx, opt_cut);
 
         Self {
             opt_render_rect: false,
             opt_render_union: true,
+            opt_cut,
 
             view,
 
@@ -76,6 +117,8 @@ impl Demo for DemoBooleanTri {
             ui.checkbox(&mut self.opt_render_rect, "render rect");
             ui.separator();
             ui.checkbox(&mut self.opt_render_union, "render union");
+            ui.separator();
+            ui.checkbox(&mut self.opt_cut, "cut");
         });
 
         for r in &mut self.rects {
@@ -83,11 +126,11 @@ impl Demo for DemoBooleanTri {
         }
 
         self.sx = rect_union(&self.rects);
-        self.net = build_net(self.view, &self.sx);
+        self.net = build_net(self.view, &self.sx, self.opt_cut);
     }
 
     fn plot_ui(&self, plot_ui: &mut PlotUi) {
-        plot_net(&self.net, plot_ui, false);
+        plot_net_inner(&self.sx, &self.net, plot_ui, false);
 
         if self.opt_render_rect {
             for r in &self.rects {

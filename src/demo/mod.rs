@@ -22,7 +22,7 @@ pub fn plot_line(plot_ui: &mut PlotUi, points: &[&Point<f64>], color: Color32) {
     plot_ui.line(plot::Line::new(PlotPoints::Owned(e_points)).color(color));
 }
 
-fn mean(points: &[&Point<f64>]) -> Point<f64> {
+pub fn pt_mean(points: &[&Point<f64>]) -> Point<f64> {
     let mut x = 0.0;
     let mut y = 0.0;
     for p in points {
@@ -46,7 +46,7 @@ fn plot_net(net: &TriangularNetwork, plot_ui: &mut PlotUi, render_supertri: bool
         plot_line(plot_ui, &[p0, p1, p2, p0], Color32::GREEN);
 
         if false {
-            let center = mean(&[p0, p1, p2]);
+            let center = pt_mean(&[p0, p1, p2]);
             let mut label = format!("t={}\n(", _t_idx);
             for i in 0..3 {
                 let n = t.neighbors[i];
