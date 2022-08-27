@@ -117,7 +117,13 @@ impl Demo for DemoDelaunay {
 
     fn plot_ui(&self, plot_ui: &mut PlotUi) {
         let net = &self.net;
-        for t in &net.triangles {
+        let v = net.cut(3, self.net.vertices.len() - 1);
+
+        for (t_idx, t) in net.triangles.iter().enumerate() {
+            if let Some(_) = v.cut_triangles.iter().find(|t0| **t0 == t_idx) {
+                continue;
+            }
+
             let [v0, v1, v2] = t.vertices;
             let p0 = net.vertices[v0];
             let p1 = net.vertices[v1];
@@ -136,6 +142,30 @@ impl Demo for DemoDelaunay {
                 .color(Color32::GREEN),
             );
         }
+
+        for (from, to) in v.cuts {
+            let v_from = &net.vertices[from];
+            let v_to = &net.vertices[to];
+
+            plot_ui.line(
+                plot::Line::new(PlotPoints::Owned(vec![pt_egui(&v_from), pt_egui(&v_to)]))
+                    .color(Color32::RED),
+            );
+        }
+
+        let p_c_ccw = v
+            .contour_ccw
+            .iter()
+            .map(|p| pt_egui(&net.vertices[*p]))
+            .collect();
+        plot_ui.line(plot::Line::new(PlotPoints::Owned(p_c_ccw)).color(Color32::BLUE));
+
+        let p_c_cw = v
+            .contour_cw
+            .iter()
+            .map(|p| pt_egui(&net.vertices[*p]))
+            .collect();
+        plot_ui.line(plot::Line::new(PlotPoints::Owned(p_c_cw)).color(Color32::YELLOW));
 
         plot_ui.points(plot::Points::new(PlotPoints::Owned(
             net.vertices.iter().skip(3).map(|v| pt_egui(v)).collect(),

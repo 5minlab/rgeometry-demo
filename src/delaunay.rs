@@ -48,6 +48,13 @@ fn is_super(idx: usize) -> bool {
     idx < 3
 }
 
+pub struct CutResult {
+    pub cuts: Vec<(usize, usize)>,
+    pub cut_triangles: Vec<usize>,
+    pub contour_cw: Vec<usize>,
+    pub contour_ccw: Vec<usize>,
+}
+
 impl TriangularNetwork {
     pub fn new(p0: Point<f64>, p1: Point<f64>, p2: Point<f64>) -> Self {
         let (p1, p2) = match Point::orient_along_direction(&p0, Direction::Through(&p1), &p2) {
@@ -63,6 +70,152 @@ impl TriangularNetwork {
                 vertices: [0, 1, 2],
                 neighbors: [None, None, None],
             }],
+        }
+    }
+
+    pub fn find_vert_dest(&self, v_from: usize, v_to: usize) -> Option<(usize, usize)> {
+        use Orientation::*;
+
+        let p_end = &self.vertices[v_to];
+
+        for (t_idx, t) in self.triangles.iter().enumerate() {
+            if let Some(idx) = t.vertex_idx(v_from) {
+                let v0 = t.vertices[idx];
+                let v1 = t.vertices[(idx + 1) % 3];
+                let v2 = t.vertices[(idx + 2) % 3];
+
+                let p0 = &self.vertices[v0];
+                let p1 = &self.vertices[v1];
+                let p2 = &self.vertices[v2];
+
+                let d0 = Point::orient_along_direction(p0, Direction::Through(p1), p_end);
+                let d1 = Point::orient_along_direction(p0, Direction::Through(p2), p_end);
+
+                match (d0, d1) {
+                    (CounterClockWise, ClockWise) => {
+                        return Some((t_idx, idx));
+                    }
+                    _ => (),
+                }
+            }
+        }
+        None
+    }
+
+    pub fn cut(&self, v_from: usize, v_to: usize) -> CutResult {
+        use Orientation::*;
+
+        let mut cuts = vec![(v_from, v_to)];
+        let mut cut_triangles = vec![];
+        let mut contour_cw = vec![v_from];
+        let mut contour_ccw = vec![v_from];
+
+        let p_start = &self.vertices[v_from];
+        let p_end = &self.vertices[v_to];
+
+        #[derive(Debug)]
+        enum CutIter {
+            FromVertex(usize, usize),
+            ToEdge(usize, usize),
+        }
+
+        let mut cur = {
+            match self.find_vert_dest(v_from, v_to) {
+                Some((t_idx, idx)) => Some(CutIter::FromVertex(t_idx, idx)),
+                _ => None,
+            }
+        };
+
+        while let Some(iter) = cur.take() {
+            match iter {
+                // ray from vertex idx
+                CutIter::FromVertex(t_idx, idx) => {
+                    cut_triangles.push(t_idx);
+
+                    let t = &self.triangles[t_idx];
+
+                    let v0 = t.vertices[idx];
+                    if v0 == v_to {
+                        break;
+                    }
+                    let v1 = t.vertices[(idx + 1) % 3];
+                    let v2 = t.vertices[(idx + 2) % 3];
+
+                    contour_cw.push(v1);
+                    contour_ccw.push(v2);
+
+                    cuts.push((v1, v2));
+
+                    match t.neighbors[(idx + 2) % 3] {
+                        Some(neighbor) => {
+                            let t_neighbor = &self.triangles[neighbor];
+                            if let Some(idx_neighbor) = t_neighbor.neighbor_idx(t_idx) {
+                                cur = Some(CutIter::ToEdge(neighbor, idx_neighbor));
+                            } else {
+                                todo!();
+                            }
+                        }
+                        None => todo!(),
+                    }
+                }
+                CutIter::ToEdge(t_idx, idx) => {
+                    cut_triangles.push(t_idx);
+
+                    let t = &self.triangles[t_idx];
+                    let v0 = t.vertices[idx];
+                    let v1 = t.vertices[(idx + 1) % 3];
+                    let v2 = t.vertices[(idx + 2) % 3];
+
+                    let p0 = &self.vertices[v0];
+                    let p1 = &self.vertices[v1];
+                    let p2 = &self.vertices[v2];
+
+                    // should not colinear
+                    let d0 = Point::orient_along_direction(p_start, Direction::Through(p_end), p0);
+                    let d1 = Point::orient_along_direction(p_start, Direction::Through(p_end), p1);
+                    // should not colineaer
+                    let d2 = Point::orient_along_direction(p_start, Direction::Through(p_end), p2);
+
+                    let (idx_from, idx_to) = if d1 == CoLinear {
+                        cur = self
+                            .find_vert_dest(v1, v_to)
+                            .map(|(t_idx, idx)| CutIter::FromVertex(t_idx, idx));
+                        continue;
+                    } else if d1.reverse() == d0 {
+                        (idx, (idx + 1) % 3)
+                    } else if d1.reverse() == d2 {
+                        ((idx + 1) % 3, (idx + 2) % 3)
+                    } else {
+                        todo!();
+                    };
+
+                    let v_t_from = t.vertices[idx_from];
+                    let v_t_to = t.vertices[idx_to];
+
+                    contour_cw.push(v_t_from);
+                    contour_ccw.push(v_t_to);
+
+                    cuts.push((v_t_from, v_t_to));
+
+                    if let Some(idx_neighbor) = t.neighbors[idx_to] {
+                        let t_neighbor = &self.triangles[idx_neighbor];
+                        let idx = t_neighbor.neighbor_idx(t_idx).unwrap();
+                        cur = Some(CutIter::ToEdge(idx_neighbor, idx));
+                    } else {
+                        break;
+                    }
+                }
+            }
+        }
+
+        contour_cw.push(v_to);
+        contour_ccw.push(v_to);
+
+        CutResult {
+            cuts,
+            cut_triangles,
+            contour_cw,
+            contour_ccw,
         }
     }
 
@@ -218,6 +371,7 @@ impl TriangularNetwork {
                 self.maybe_swap(idx_t2, reductions);
             }
 
+            // TODO: add tests
             Colinear(idx_t, idx_neighbor) => {
                 let idx_v = self.vertices.len();
                 self.vertices.push(*p);
@@ -331,6 +485,16 @@ impl Triangle {
         }
         todo!();
     }
+
+    fn vertex_idx(&self, v_idx: usize) -> Option<usize> {
+        for i in 0..3 {
+            if self.vertices[i] == v_idx {
+                return Some(i);
+            }
+        }
+        None
+    }
+
     fn neighbor_idx(&self, idx: usize) -> Option<usize> {
         for i in 0..3 {
             if self.neighbors[i] == Some(idx) {
