@@ -1,4 +1,4 @@
-use crate::pt_egui;
+use crate::{pt_egui, Demo};
 use eframe::egui::{
     self,
     epaint::Color32,
@@ -56,21 +56,24 @@ impl DemoDelaunay {
 
         Self {
             view,
-            opt_render_outer_tri: true,
+            opt_render_outer_tri: false,
             reductions,
             reductions_max: reductions,
             points,
             net,
         }
     }
+}
 
-    pub fn ui(&mut self, ctx: &egui::Context, ui: &mut Ui) {
+impl Demo for DemoDelaunay {
+    fn name(&self) -> &'static str {
+        "delaunay"
+    }
+
+    fn ui(&mut self, _t: f64, ctx: &egui::Context, ui: &mut Ui) {
+        let mut regen = false;
         if ctx.input().key_pressed(Key::D) {
-            self.points = gen_delaunay_points(self.view);
-            let (net, reductions) = gen_delaunay(self.view, &self.points, std::usize::MAX);
-            self.net = net;
-            self.reductions = reductions;
-            self.reductions_max = reductions;
+            regen = true;
         }
         if ctx.input().key_pressed(Key::F) {
             self.opt_render_outer_tri = !self.opt_render_outer_tri;
@@ -86,9 +89,15 @@ impl DemoDelaunay {
 
         ui.horizontal(|ui| {
             ui.checkbox(&mut self.opt_render_outer_tri, "render super");
+            ui.separator();
+            if ui.button("regenerate").clicked() {
+                regen = true;
+            }
+            ui.separator();
             ui.add(
                 egui::Slider::new(&mut self.reductions, 0..=self.reductions_max).text("reductions"),
             );
+            ui.separator();
         });
         ui.label("shortcuts: (D) Regenerate | (F) Toggle supertriangles | (C) Step forward | (X) Step backword");
 
@@ -96,9 +105,17 @@ impl DemoDelaunay {
             let (net, _) = gen_delaunay(self.view, &self.points, self.reductions);
             self.net = net;
         }
+
+        if regen {
+            self.points = gen_delaunay_points(self.view);
+            let (net, reductions) = gen_delaunay(self.view, &self.points, std::usize::MAX);
+            self.net = net;
+            self.reductions = reductions;
+            self.reductions_max = reductions;
+        }
     }
 
-    pub fn plot_ui(&self, plot_ui: &mut PlotUi) {
+    fn plot_ui(&self, plot_ui: &mut PlotUi) {
         let net = &self.net;
         for t in &net.triangles {
             let [v0, v1, v2] = t.vertices;
