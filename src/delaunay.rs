@@ -534,21 +534,14 @@ impl Triangle {
     }
 
     fn vertex_idx(&self, v_idx: VertIdx) -> Option<SubIdx> {
-        for i in 0..3 {
-            if self.vertices[i] == v_idx {
-                return Some(SubIdx(i));
-            }
-        }
-        None
+        self.vertices.iter().position(|p| *p == v_idx).map(SubIdx)
     }
 
     fn neighbor_idx(&self, idx: TriIdx) -> Option<SubIdx> {
-        for i in 0..3 {
-            if self.neighbors[i] == Some(idx) {
-                return Some(SubIdx(i));
-            }
-        }
-        None
+        self.neighbors
+            .iter()
+            .position(|p| *p == Some(idx))
+            .map(SubIdx)
     }
 
     // split triangle
