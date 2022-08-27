@@ -15,7 +15,7 @@ fn rect_union(rects: &[Rect]) -> SimplicalChain {
 }
 
 fn build_net(view: f64, sx: &SimplicalChain) -> TriangularNetwork {
-    let v = view * 3.0;
+    let v = view * 4.0;
     let mut net = TriangularNetwork::new(
         Point::new([-v, -v]),
         Point::new([v, -v]),

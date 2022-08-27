@@ -22,6 +22,17 @@ pub fn plot_line(plot_ui: &mut PlotUi, points: &[&Point<f64>], color: Color32) {
     plot_ui.line(plot::Line::new(PlotPoints::Owned(e_points)).color(color));
 }
 
+fn mean(points: &[&Point<f64>]) -> Point<f64> {
+    let mut x = 0.0;
+    let mut y = 0.0;
+    for p in points {
+        x += p.array[0];
+        y += p.array[1];
+    }
+    let l = points.len() as f64;
+    Point::new([x / l, y / l])
+}
+
 fn plot_net(net: &TriangularNetwork, plot_ui: &mut PlotUi, render_supertri: bool) {
     for (_t_idx, t) in net.triangles.iter().enumerate() {
         let [v0, v1, v2] = t.vertices;
@@ -33,6 +44,22 @@ fn plot_net(net: &TriangularNetwork, plot_ui: &mut PlotUi, render_supertri: bool
         }
 
         plot_line(plot_ui, &[p0, p1, p2, p0], Color32::GREEN);
+
+        if false {
+            let center = mean(&[p0, p1, p2]);
+            let mut label = format!("t={}\n(", _t_idx);
+            for i in 0..3 {
+                let n = t.neighbors[i];
+                let prefix = if i == 0 { "" } else { ", " };
+                match n {
+                    Some(n) => label += &format!("{}{}", prefix, n.0),
+                    None => label += &format!("{}_", prefix),
+                }
+            }
+            label += ")";
+
+            plot_ui.text(plot::Text::new(pt_egui(&center), label));
+        }
     }
 }
 
@@ -158,8 +185,8 @@ impl Default for MyApp {
         let demos: Vec<Box<dyn Demo>> = vec![
             Box::new(boolean_tri::DemoBooleanTri::new(view)),
             Box::new(boolean::DemoBoolean::new(view)),
-            Box::new(cdt::DemoCDT::new(view)),
             Box::new(delaunay::DemoDelaunay::new(view)),
+            Box::new(cdt::DemoCDT::new(view)),
             Box::new(gridnet::DemoGridNet::new(view)),
         ];
         let selected = demos[0].name();

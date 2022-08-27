@@ -239,7 +239,7 @@ impl TriangularNetwork {
         if let Some(idx1) = idx1 {
             self.tri_mut(idx1).neighbors[0] = idx0;
         }
-        self.check_invariant()?;
+        self.check_invariant("post-cut_resolve")?;
 
         Ok(out)
     }
@@ -357,6 +357,13 @@ impl TriangularNetwork {
         }
     }
 
+    fn check_invariant_tri_opt(&self, idx: Option<TriIdx>, msg: &str) -> Result<()> {
+        if let Some(idx) = idx {
+            self.check_invariant_tri(idx, msg)?;
+        }
+        Ok(())
+    }
+
     fn check_invariant_tri(&self, idx: TriIdx, msg: &str) -> Result<()> {
         let t = self.tri(idx);
         for i in 0..3 {
@@ -384,15 +391,32 @@ impl TriangularNetwork {
         Ok(())
     }
 
-    fn check_invariant(&self) -> Result<()> {
+    fn check_invariant(&self, msg: &str) -> Result<()> {
         for idx in 0..self.triangles.len() {
-            self.check_invariant_tri(TriIdx(idx), "check_invariant")?;
+            self.check_invariant_tri(TriIdx(idx), msg)?;
         }
         Ok(())
     }
 
+    fn debug_tri(&self, idx: TriIdx) -> String {
+        let p0 = self.tri_vert(idx, SubIdx(0));
+        let p1 = self.tri_vert(idx, SubIdx(1));
+        let p2 = self.tri_vert(idx, SubIdx(2));
+        format!(
+            "{:?}={:?}, ({:?}, {:?}, {:?})",
+            idx,
+            self.tri(idx),
+            p0,
+            p1,
+            p2
+        )
+    }
+
     fn maybe_swap(&mut self, idx0: TriIdx, reductions: &mut usize) -> Result<bool> {
-        let idx1 = match self.tri(idx0).neighbor(SubIdx(2)) {
+        use Orientation::*;
+
+        let t0_t1_idx = SubIdx(2);
+        let idx1 = match self.tri(idx0).neighbor(t0_t1_idx) {
             Some(idx) => idx,
             None => return Ok(false),
         };
@@ -405,8 +429,17 @@ impl TriangularNetwork {
         let t0 = self.tri(idx0);
         let t1 = self.tri(idx1);
 
-        let t0_t1_idx = SubIdx(2);
-        let t1_t0_idx = t1.neighbor_idx(idx0).unwrap();
+        let t1_t0_idx = match t1.neighbor_idx(idx0) {
+            Some(idx) => idx,
+            None => {
+                anyhow::bail!(
+                    "invalid tri pair: \n{}\n{}\n{:#?}",
+                    self.debug_tri(idx0),
+                    self.debug_tri(idx1),
+                    self,
+                );
+            }
+        };
 
         let v0 = t0.vert(t0_t1_idx);
         let v1 = t0.vert(t0_t1_idx.ccw());
@@ -423,6 +456,10 @@ impl TriangularNetwork {
         let d1 = Point::orient_along_direction(p0, Direction::Through(p2), p3);
         let d2 = Point::orient_along_direction(p1, Direction::Through(p3), p0);
         let d3 = Point::orient_along_direction(p1, Direction::Through(p3), p2);
+
+        if d0 == CoLinear || d1 == CoLinear || d2 == CoLinear || d3 == CoLinear {
+            return Ok(false);
+        }
 
         if d0 == d1 || d2 == d3 {
             return Ok(false);
@@ -460,18 +497,38 @@ impl TriangularNetwork {
 
         // n0, n2 stays same, n1, n3 changes neighbor
         if let Some(idx) = n1 {
-            self.tri_mut(idx).update_neighbor(idx0, idx1);
+            if !self.tri_mut(idx).update_neighbor(idx0, idx1) {
+                anyhow::bail!(
+                    "invalid tri pair: \nt0={}\nt1={}\nn1={}",
+                    self.debug_tri(idx0),
+                    self.debug_tri(idx1),
+                    self.debug_tri(idx)
+                );
+            }
         }
         if let Some(idx) = n3 {
-            self.tri_mut(idx).update_neighbor(idx1, idx0);
+            if !self.tri_mut(idx).update_neighbor(idx1, idx0) {
+                anyhow::bail!(
+                    "invalid tri pair: \nt0={}\nt1={}\nn3={}",
+                    self.debug_tri(idx0),
+                    self.debug_tri(idx1),
+                    self.debug_tri(idx)
+                );
+            }
         }
 
-        self.check_invariant()?;
+        self.check_invariant_tri(idx0, "pre-swap idx0")?;
+        self.check_invariant_tri(idx1, "pre-swap idx1")?;
+
+        self.check_invariant_tri_opt(n0, "pre-swap n0")?;
+        self.check_invariant_tri_opt(n1, "pre-swap n1")?;
+        self.check_invariant_tri_opt(n2, "pre-swap n2")?;
+        self.check_invariant_tri_opt(n3, "pre-swap n3")?;
 
         self.maybe_swap(idx0, reductions)?;
         self.maybe_swap(idx1, reductions)?;
 
-        self.check_invariant()?;
+        self.check_invariant("post-swap")?;
 
         Ok(true)
     }
@@ -524,7 +581,7 @@ impl TriangularNetwork {
                 self.maybe_swap(idx_t1, reductions)?;
                 self.maybe_swap(idx_t2, reductions)?;
 
-                self.check_invariant()?;
+                self.check_invariant("post-InTriangle")?;
             }
 
             Colinear(idx_t, idx_neighbor) => {
@@ -564,10 +621,14 @@ impl TriangularNetwork {
                     neighbors: [Some(idx_t2), idx_t1, t0.neighbor(idx_neighbor.ccw())],
                 };
 
+                let n = t0.neighbor(idx_neighbor.cw());
                 *self.tri_mut(idx_t2) = Triangle {
                     vertices: [idx_v, v1, v2],
-                    neighbors: [idx_t3, Some(idx_t0), t0.neighbor(idx_neighbor.cw())],
+                    neighbors: [idx_t3, Some(idx_t0), n],
                 };
+                if let Some(n) = n {
+                    self.tri_mut(n).update_neighbor(idx_t0, idx_t2);
+                }
 
                 if let Some(idx_t1) = idx_t1 {
                     let idx_t3 = idx_t3.unwrap();
@@ -584,10 +645,14 @@ impl TriangularNetwork {
                         neighbors: [Some(idx_t0), Some(idx_t3), t1.neighbor(idx_neighbor.cw())],
                     };
 
+                    let n = t1.neighbor(idx_neighbor.ccw());
                     *self.tri_mut(idx_t3) = Triangle {
                         vertices: [idx_v, v0, v1],
-                        neighbors: [Some(idx_t1), Some(idx_t2), t1.neighbor(idx_neighbor.ccw())],
+                        neighbors: [Some(idx_t1), Some(idx_t2), n],
                     };
+                    if let Some(n) = n {
+                        self.tri_mut(n).update_neighbor(idx_t1, idx_t3);
+                    }
                 }
 
                 self.check_invariant_tri(idx_t0, "Colinear(t0)")?;
@@ -598,6 +663,17 @@ impl TriangularNetwork {
                 if let Some(idx_t3) = idx_t3 {
                     self.check_invariant_tri(idx_t3, "Colinear(t3)")?;
                 }
+
+                self.maybe_swap(idx_t0, reductions)?;
+                self.maybe_swap(idx_t2, reductions)?;
+                if let Some(idx) = idx_t1 {
+                    self.maybe_swap(idx, reductions)?;
+                }
+                if let Some(idx) = idx_t3 {
+                    self.maybe_swap(idx, reductions)?;
+                }
+
+                self.check_invariant("post-Colinear")?;
             }
 
             Outside(_, _) => {
@@ -605,7 +681,7 @@ impl TriangularNetwork {
             }
         }
 
-        self.check_invariant()
+        self.check_invariant("post-insert")
     }
 
     fn locate(&self, start: TriIdx, p: &Point<f64>) -> TriangularNetworkLocation {
@@ -630,9 +706,10 @@ impl TriangularNetwork {
             (_, ClockWise, _) => Outside(start, SubIdx(2)),
             (_, _, ClockWise) => Outside(start, SubIdx(0)),
             // TODO: (Colinear, Colinear, _) -> exact point?
-            (CoLinear, _, _) => Colinear(start, SubIdx(1)),
-            (_, CoLinear, _) => Colinear(start, SubIdx(2)),
-            (_, _, CoLinear) => Colinear(start, SubIdx(0)),
+            (CoLinear, CounterClockWise, CounterClockWise) => Colinear(start, SubIdx(1)),
+            (CounterClockWise, CoLinear, CounterClockWise) => Colinear(start, SubIdx(2)),
+            (CounterClockWise, CounterClockWise, CoLinear) => Colinear(start, SubIdx(0)),
+            _ => todo!(),
         }
     }
 
@@ -664,7 +741,7 @@ pub struct Triangle {
     pub vertices: [VertIdx; 3],
     //  - self, neighbors[0], neighbors[1] meets at vertices[0], counterclockwise
     //  - vertices[0], vertices[1] meets with neighbors[1], ...
-    neighbors: [Option<TriIdx>; 3],
+    pub neighbors: [Option<TriIdx>; 3],
 }
 
 impl Triangle {

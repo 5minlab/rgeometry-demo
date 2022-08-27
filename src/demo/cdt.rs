@@ -101,7 +101,7 @@ impl DemoCDT {
             if cut.cuts.is_empty() {
                 continue;
             }
-            net.cut_restore(&cut);
+            net.cut_restore(&cut).ok();
         }
     }
 }

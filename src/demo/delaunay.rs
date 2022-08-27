@@ -10,20 +10,32 @@ use rand::{thread_rng, Rng};
 use rgeometry::data::Point;
 
 fn gen_delaunay_points(view: f64) -> Vec<Point<f64>> {
-    let mut rng = thread_rng();
     let mut v = Vec::new();
-    for _i in 0..20 {
-        let inner = view;
-        let x = rng.gen_range(-inner..inner);
-        let y = rng.gen_range(-inner..inner);
+    if false {
+        let grid = 5;
+        for i in 0..grid {
+            for j in 0..grid {
+                let inner = view * 2.0;
+                let x = i as f64 / (grid - 1) as f64 * inner - inner / 2.0;
+                let y = j as f64 / (grid - 1) as f64 * inner - inner / 2.0;
+                v.push(Point::new([x, y]));
+            }
+        }
+    } else {
+        let mut rng = thread_rng();
+        for _i in 0..20 {
+            let inner = view;
+            let x = rng.gen_range(-inner..inner);
+            let y = rng.gen_range(-inner..inner);
 
-        v.push(Point::new([x, y]));
+            v.push(Point::new([x, y]));
+        }
     }
     v
 }
 
 fn gen_delaunay(view: f64, points: &[Point<f64>], reductions: usize) -> (TriangularNetwork, usize) {
-    let v = view * 3.0;
+    let v = view * 4.0;
     let mut t = TriangularNetwork::new(
         Point::new([-v, -v]),
         Point::new([v, -v]),
@@ -123,6 +135,10 @@ impl Demo for DemoDelaunay {
         }
 
         let mut rng = thread_rng();
+        if self.reductions != self.reductions_max {
+            self.cut = None;
+        }
+
         if self.reductions == self.reductions_max && self.cut.is_none() {
             let cut = loop {
                 let idx0 = VertIdx(rng.gen_range(3..self.net.vertices.len()));
@@ -137,7 +153,7 @@ impl Demo for DemoDelaunay {
                 break v;
             };
 
-            self.net.cut_restore(&cut);
+            self.net.cut_restore(&cut).ok();
             self.cut = Some(cut);
         }
     }
