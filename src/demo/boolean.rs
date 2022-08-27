@@ -11,6 +11,8 @@ pub struct DemoBoolean {
     opt_render_rect: bool,
     opt_render_union: bool,
 
+    view: f64,
+
     rects: Vec<Rect>,
     sx: SimplicalChain,
 }
@@ -34,6 +36,8 @@ impl DemoBoolean {
             opt_render_rect: true,
             opt_render_union: true,
 
+            view,
+
             rects,
             sx,
         }
@@ -47,6 +51,10 @@ impl Demo for DemoBoolean {
 
     fn ui(&mut self, t: f64, _ctx: &egui::Context, ui: &mut Ui) {
         ui.horizontal(|ui| {
+            if ui.button("regenerate").clicked() {
+                self.rects = gen_rects(self.view, 100);
+            }
+            ui.separator();
             ui.checkbox(&mut self.opt_render_rect, "render rect");
             ui.separator();
             ui.checkbox(&mut self.opt_render_union, "render union");
