@@ -20,7 +20,12 @@ impl SubIdx {
     }
 }
 
+#[derive(Debug)]
 pub struct CutResult {
+    #[allow(unused)]
+    from: VertIdx,
+    #[allow(unused)]
+    to: VertIdx,
     pub cuts: Vec<(VertIdx, VertIdx)>,
     pub cut_triangles: Vec<TriIdx>,
     pub contour_cw: Vec<(TriIdx, SubIdx)>,
@@ -152,32 +157,48 @@ impl TriangularNetwork {
 
     pub fn cut_restore_subdevide(
         &mut self,
-        idx_p: Option<TriIdx>,
-        slice: &[(Option<(TriIdx, SubIdx)>, VertIdx)],
+        idx_p: Option<(TriIdx, SubIdx)>,
+        slice: &[((TriIdx, SubIdx), Option<(TriIdx, SubIdx)>, VertIdx)],
         indices: &mut Vec<TriIdx>,
+        map: &mut Vec<((TriIdx, SubIdx), (TriIdx, SubIdx))>,
         out: &mut Vec<(VertIdx, VertIdx)>,
     ) -> Option<TriIdx> {
         if slice.len() < 2 {
             return None;
         }
         if slice.len() == 2 {
-            if let Some((tri, sub)) = slice[1].0 {
-                self.tri_mut(tri).neighbors[sub.0] = idx_p;
-                return Some(tri);
+            if let (tup_self, Some(mut tup), _) = slice[1] {
+                if indices.contains(&tup.0) {
+                    // dirty index, project
+                    if let Some(p) = idx_p {
+                        let proj = (tup_self, p);
+                        map.push(proj);
+                    } else {
+                        todo!();
+                    }
+                    return None;
+                }
+
+                if let Some((_before, after)) = map.iter().find(|t| t.0 == tup) {
+                    tup = *after;
+                }
+
+                *self.tri_mut(tup.0).neighbor_mut(tup.1) = idx_p.map(|(t, _i)| t);
+                return Some(tup.0);
             }
             return None;
         }
 
         let last = slice.len() - 1;
 
-        let p_start = self.vert(slice[0].1);
-        let p_end = self.vert(slice[last].1);
+        let p_start = self.vert(slice[0].2);
+        let p_end = self.vert(slice[last].2);
 
         let mut curidx = 1;
 
         for i in 2..last {
-            let cur = self.vert(slice[curidx].1);
-            let next = self.vert(slice[i].1);
+            let cur = self.vert(slice[curidx].2);
+            let next = self.vert(slice[i].2);
             if inside_circle(p_start, cur, p_end, next) {
                 curidx = i;
             }
@@ -185,53 +206,67 @@ impl TriangularNetwork {
 
         let idx_self = indices.pop().unwrap();
 
-        let idx_t0 =
-            self.cut_restore_subdevide(Some(idx_self), &slice[0..curidx + 1], indices, out);
-        let idx_t1 =
-            self.cut_restore_subdevide(Some(idx_self), &slice[curidx..slice.len()], indices, out);
+        let idx_t0 = self.cut_restore_subdevide(
+            Some((idx_self, SubIdx(1))),
+            &slice[..curidx + 1],
+            indices,
+            map,
+            out,
+        );
+        let idx_t1 = self.cut_restore_subdevide(
+            Some((idx_self, SubIdx(2))),
+            &slice[curidx..],
+            indices,
+            map,
+            out,
+        );
 
         *self.tri_mut(idx_self) = Triangle {
-            vertices: [slice[0].1, slice[curidx].1, slice[last].1],
-            neighbors: [idx_p, idx_t0, idx_t1],
+            vertices: [slice[0].2, slice[curidx].2, slice[last].2],
+            neighbors: [idx_p.map(|(p, _i)| p), idx_t0, idx_t1],
         };
 
-        out.push((slice[0].1, slice[curidx].1));
-        out.push((slice[curidx].1, slice[last].1));
+        out.push((slice[0].2, slice[curidx].2));
+        out.push((slice[curidx].2, slice[last].2));
 
         Some(idx_self)
     }
 
     pub fn cut_restore(&mut self, res: &CutResult) -> Result<Vec<(VertIdx, VertIdx)>> {
+        if res.cut_triangles.len() == 0 {
+            return Ok(vec![]);
+        }
         let mut out = Vec::new();
 
         let mut verts_ccw = Vec::new();
         for (idx, (tri, sub)) in res.contour_ccw.iter().rev().enumerate() {
             let t = self.tri(*tri);
             if idx == 0 {
-                verts_ccw.push((None, t.vert(sub.cw())));
+                verts_ccw.push(((*tri, *sub), None, t.vert(sub.cw())));
             }
             let n = t
                 .neighbor(*sub)
                 .map(|n| (n, self.tri(n).neighbor_idx(*tri).unwrap()));
-            verts_ccw.push((n, t.vert(*sub)));
+            verts_ccw.push(((*tri, *sub), n, t.vert(*sub)));
         }
 
         let mut verts_cw = Vec::new();
         for (idx, (tri, sub)) in res.contour_cw.iter().enumerate() {
             let t = self.tri(*tri);
             if idx == 0 {
-                verts_cw.push((None, t.vert(sub.cw())));
+                verts_cw.push(((*tri, *sub), None, t.vert(sub.cw())));
             }
             let n = t
                 .neighbor(*sub)
                 .map(|n| (n, self.tri(n).neighbor_idx(*tri).unwrap()));
-            verts_cw.push((n, t.vert(*sub)));
+            verts_cw.push(((*tri, *sub), n, t.vert(*sub)));
         }
 
         let mut triangles = res.cut_triangles.clone();
+        let mut map = Vec::new();
 
-        let idx0 = self.cut_restore_subdevide(None, &verts_ccw, &mut triangles, &mut out);
-        let idx1 = self.cut_restore_subdevide(None, &verts_cw, &mut triangles, &mut out);
+        let idx0 = self.cut_restore_subdevide(None, &verts_ccw, &mut triangles, &mut map, &mut out);
+        let idx1 = self.cut_restore_subdevide(None, &verts_cw, &mut triangles, &mut map, &mut out);
 
         if let Some(idx0) = idx0 {
             self.tri_mut(idx0).neighbors[0] = idx1;
@@ -239,7 +274,10 @@ impl TriangularNetwork {
         if let Some(idx1) = idx1 {
             self.tri_mut(idx1).neighbors[0] = idx0;
         }
-        self.check_invariant("post-cut_resolve")?;
+        if let Err(e) = self.check_invariant("post-cut_resolve") {
+            eprintln!("{:?}", res);
+            return Err(e);
+        }
 
         Ok(out)
     }
@@ -277,6 +315,10 @@ impl TriangularNetwork {
                     let t = self.tri(t_idx);
 
                     let v0 = t.vert(idx);
+                    if v0 == v_to {
+                        panic!("!!!");
+                    }
+
                     contour_ccw.push((t_idx, idx));
                     contour_cw.push((t_idx, idx.ccw()));
                     if v0 == v_to {
@@ -330,6 +372,7 @@ impl TriangularNetwork {
                         contour_cw.push((t_idx, idx.ccw()));
                         idx.cw()
                     } else {
+                        dbg!((d0, d1, d2));
                         todo!();
                     };
 
@@ -343,13 +386,15 @@ impl TriangularNetwork {
                         let idx = t_neighbor.neighbor_idx(t_idx).unwrap();
                         cur = Some(CutIter::ToEdge(idx_neighbor, idx));
                     } else {
-                        break;
+                        todo!();
                     }
                 }
             }
         }
 
         CutResult {
+            from: v_from,
+            to: v_to,
             cuts,
             cut_triangles,
             contour_cw,
@@ -751,6 +796,10 @@ impl Triangle {
 
     fn neighbor(&self, idx: SubIdx) -> Option<TriIdx> {
         self.neighbors[idx.0]
+    }
+
+    fn neighbor_mut(&mut self, idx: SubIdx) -> &mut Option<TriIdx> {
+        &mut self.neighbors[idx.0]
     }
 
     fn update_neighbor(&mut self, idx_from: TriIdx, idx_to: TriIdx) -> bool {
