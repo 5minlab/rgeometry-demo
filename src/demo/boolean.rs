@@ -1,11 +1,11 @@
-use crate::{gen_rects, p_rg_to_egui, pt_egui, Demo, Rect};
+use super::{gen_rects, p_rg_to_egui, pt_egui, Demo, Rect};
+use crate::boolean::*;
 use eframe::egui::{
     self,
     epaint::Color32,
     plot::{self, *},
     Ui,
 };
-use rgeometry_playground::boolean::*;
 
 pub struct DemoBoolean {
     opt_render_rect: bool,

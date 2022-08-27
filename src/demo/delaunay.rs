@@ -1,4 +1,5 @@
-use crate::{pt_egui, Demo};
+use super::{pt_egui, Demo};
+use crate::delaunay::TriangularNetwork;
 use eframe::egui::{
     self,
     epaint::Color32,
@@ -7,7 +8,6 @@ use eframe::egui::{
 };
 use rand::{thread_rng, Rng};
 use rgeometry::data::Point;
-use rgeometry_playground::delaunay::TriangularNetwork;
 
 fn gen_delaunay_points(view: f64) -> Vec<Point<f64>> {
     let mut rng = thread_rng();

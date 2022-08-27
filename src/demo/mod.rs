@@ -119,7 +119,7 @@ trait Demo {
     fn plot_ui(&self, plot_ui: &mut PlotUi);
 }
 
-struct MyApp {
+pub struct MyApp {
     pause: bool,
     t: f64,
 
@@ -235,13 +235,4 @@ impl eframe::App for MyApp {
             });
         });
     }
-}
-
-fn main() {
-    let options = eframe::NativeOptions::default();
-    eframe::run_native(
-        "rgeometry playground",
-        options,
-        Box::new(|_cc| Box::new(MyApp::default())),
-    );
 }

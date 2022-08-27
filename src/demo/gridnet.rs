@@ -1,4 +1,4 @@
-use crate::{gen_rects, p_rg_to_egui, pt_egui, Demo, Rect};
+use super::{gen_rects, p_rg_to_egui, pt_egui, Demo, Rect};
 use eframe::egui::{
     self,
     epaint::Color32,

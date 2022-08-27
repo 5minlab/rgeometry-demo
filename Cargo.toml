@@ -3,14 +3,21 @@ name = "rgeometry-playground"
 version = "0.1.0"
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 anyhow = "1.0.62"
 eframe = "0.19.0"
 rand = "0.8.5"
 rgeometry = { path = "../rgeometry" }
-stopwatch = "0.0.7"
 
 [profile.release]
 debug = 1
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+tracing-subscriber = "0.3"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+console_error_panic_hook = "0.1.6"
+tracing-wasm = "0.2"
