@@ -148,59 +148,96 @@ impl TriangularNetwork {
         None
     }
 
-    pub fn cut_restore_subdevide(&self, slice: &[VertIdx], out: &mut Vec<(VertIdx, VertIdx)>) {
-        if slice.len() < 3 {
-            return;
+    pub fn cut_restore_subdevide(
+        &mut self,
+        idx_p: Option<TriIdx>,
+        slice: &[(Option<(TriIdx, SubIdx)>, VertIdx)],
+        indices: &mut Vec<TriIdx>,
+        out: &mut Vec<(VertIdx, VertIdx)>,
+    ) -> Option<TriIdx> {
+        if slice.len() < 2 {
+            return None;
         }
+        if slice.len() == 2 {
+            if let Some((tri, sub)) = slice[1].0 {
+                self.tri_mut(tri).neighbors[sub.0] = idx_p;
+                return Some(tri);
+            }
+            return None;
+        }
+
         let last = slice.len() - 1;
 
-        let p_start = self.vert(slice[0]);
-        let p_end = self.vert(slice[last]);
+        let p_start = self.vert(slice[0].1);
+        let p_end = self.vert(slice[last].1);
 
         let mut curidx = 1;
 
         for i in 2..last {
-            let cur = self.vert(slice[curidx]);
-            let next = self.vert(slice[i]);
+            let cur = self.vert(slice[curidx].1);
+            let next = self.vert(slice[i].1);
             if inside_circle(p_start, cur, p_end, next) {
                 curidx = i;
             }
         }
 
-        out.push((slice[0], slice[curidx]));
-        out.push((slice[curidx], slice[last]));
+        let idx_self = indices.pop().unwrap();
 
-        self.cut_restore_subdevide(&slice[0..curidx + 1], out);
-        self.cut_restore_subdevide(&slice[curidx..slice.len()], out);
+        let idx_t0 =
+            self.cut_restore_subdevide(Some(idx_self), &slice[0..curidx + 1], indices, out);
+        let idx_t1 =
+            self.cut_restore_subdevide(Some(idx_self), &slice[curidx..slice.len()], indices, out);
+
+        *self.tri_mut(idx_self) = Triangle {
+            vertices: [slice[0].1, slice[curidx].1, slice[last].1],
+            neighbors: [idx_p, idx_t0, idx_t1],
+        };
+
+        out.push((slice[0].1, slice[curidx].1));
+        out.push((slice[curidx].1, slice[last].1));
+
+        Some(idx_self)
     }
 
-    pub fn cut_restore(&self, res: &CutResult) -> Vec<(VertIdx, VertIdx)> {
+    pub fn cut_restore(&mut self, res: &CutResult) -> Vec<(VertIdx, VertIdx)> {
         let mut out = Vec::new();
 
-        let mut verts = Vec::new();
+        let mut verts_ccw = Vec::new();
         for (idx, (tri, sub)) in res.contour_ccw.iter().rev().enumerate() {
             let t = self.tri(*tri);
             if idx == 0 {
-                verts.push(t.vert(sub.cw()));
+                verts_ccw.push((None, t.vert(sub.cw())));
             }
-            verts.push(t.vert(*sub));
+            let n = t
+                .neighbor(*sub)
+                .map(|n| (n, self.tri(n).neighbor_idx(*tri).unwrap()));
+            verts_ccw.push((n, t.vert(*sub)));
         }
-        self.cut_restore_subdevide(&verts, &mut out);
 
-        let mut verts = Vec::new();
+        let mut verts_cw = Vec::new();
         for (idx, (tri, sub)) in res.contour_cw.iter().enumerate() {
             let t = self.tri(*tri);
             if idx == 0 {
-                verts.push(t.vert(sub.cw()));
+                verts_cw.push((None, t.vert(sub.cw())));
             }
-            verts.push(t.vert(*sub));
+            let n = t
+                .neighbor(*sub)
+                .map(|n| (n, self.tri(n).neighbor_idx(*tri).unwrap()));
+            verts_cw.push((n, t.vert(*sub)));
         }
-        /*
-        for i in 0..verts.len() - 1 {
-            out.push((verts[i], verts[i + 1]));
+
+        let mut triangles = res.cut_triangles.clone();
+
+        let idx0 = self.cut_restore_subdevide(None, &verts_ccw, &mut triangles, &mut out);
+        let idx1 = self.cut_restore_subdevide(None, &verts_cw, &mut triangles, &mut out);
+
+        if let Some(idx0) = idx0 {
+            self.tri_mut(idx0).neighbors[0] = idx1;
         }
-        */
-        self.cut_restore_subdevide(&verts, &mut out);
+        if let Some(idx1) = idx1 {
+            self.tri_mut(idx1).neighbors[0] = idx0;
+        }
+        self.check_invariant();
 
         out
     }

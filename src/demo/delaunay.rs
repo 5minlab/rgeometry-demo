@@ -46,7 +46,9 @@ pub struct DemoDelaunay {
     reductions: usize,
     reductions_max: usize,
     points: Vec<Point<f64>>,
+
     net: TriangularNetwork,
+    cut: Option<CutResult>,
 }
 
 impl DemoDelaunay {
@@ -60,6 +62,8 @@ impl DemoDelaunay {
             reductions,
             reductions_max: reductions,
             points,
+
+            cut: None,
             net,
         }
     }
@@ -131,54 +135,63 @@ impl Demo for DemoDelaunay {
             self.points = gen_delaunay_points(self.view);
             let (net, reductions) = gen_delaunay(self.view, &self.points, std::usize::MAX);
             self.net = net;
+            self.cut = None;
             self.reductions = reductions;
             self.reductions_max = reductions;
+        }
+
+        let mut rng = thread_rng();
+        if self.reductions == self.reductions_max && self.cut.is_none() {
+            let cut = loop {
+                let idx0 = VertIdx(rng.gen_range(3..self.net.vertices.len()));
+                let idx1 = VertIdx(rng.gen_range(3..self.net.vertices.len()));
+                if idx0 == idx1 {
+                    continue;
+                }
+                let v = self.net.cut(idx0, idx1);
+                if v.cuts.len() < 2 {
+                    continue;
+                }
+                break v;
+            };
+
+            self.net.cut_restore(&cut);
+            self.cut = Some(cut);
         }
     }
 
     fn plot_ui(&self, plot_ui: &mut PlotUi) {
         let net = &self.net;
 
-        let mut rng = thread_rng();
-
-        let v = loop {
-            let idx0 = VertIdx(rng.gen_range(3..self.net.vertices.len()));
-            let idx1 = VertIdx(rng.gen_range(3..self.net.vertices.len()));
-            if idx0 == idx1 {
-                continue;
-            }
-            let v = net.cut(idx0, idx1);
-            if v.cuts.len() < 2 {
-                continue;
-            }
-            break v;
-        };
-
         plot_net(net, plot_ui, self.opt_render_supertri);
 
-        for (from, to) in &v.cuts {
-            let p_from = net.vert(*from);
-            let p_to = net.vert(*to);
-            plot_line(plot_ui, &[p_from, p_to], Color32::RED);
-        }
+        if let Some(v) = &self.cut {
+            for (from, to) in &v.cuts {
+                let p_from = net.vert(*from);
+                let p_to = net.vert(*to);
+                plot_line(plot_ui, &[p_from, p_to], Color32::RED);
+            }
 
-        for (t_idx, idx) in &v.contour_ccw {
-            let p_from = net.tri_vert(*t_idx, idx.cw());
-            let p_to = net.tri_vert(*t_idx, *idx);
-            plot_line(plot_ui, &[p_from, p_to], Color32::BLUE);
-        }
+            /*
+            for (t_idx, idx) in &v.contour_ccw {
+                let p_from = net.tri_vert(*t_idx, idx.cw());
+                let p_to = net.tri_vert(*t_idx, *idx);
+                plot_line(plot_ui, &[p_from, p_to], Color32::BLUE);
+            }
 
-        for (t_idx, idx) in &v.contour_cw {
-            let p_from = net.tri_vert(*t_idx, idx.cw());
-            let p_to = net.tri_vert(*t_idx, *idx);
-            plot_line(plot_ui, &[p_from, p_to], Color32::YELLOW);
-        }
+            for (t_idx, idx) in &v.contour_cw {
+                let p_from = net.tri_vert(*t_idx, idx.cw());
+                let p_to = net.tri_vert(*t_idx, *idx);
+                plot_line(plot_ui, &[p_from, p_to], Color32::YELLOW);
+            }
 
-        let restore = net.cut_restore(&v);
-        for (v0, v1) in restore {
-            let p0 = net.vert(v0);
-            let p1 = net.vert(v1);
-            plot_line(plot_ui, &[p0, p1], Color32::WHITE);
+            let restore = net.cut_restore(&v);
+            for (v0, v1) in restore {
+                let p0 = net.vert(v0);
+                let p1 = net.vert(v1);
+                plot_line(plot_ui, &[p0, p1], Color32::WHITE);
+            }
+            */
         }
 
         plot_ui.points(plot::Points::new(PlotPoints::Owned(
