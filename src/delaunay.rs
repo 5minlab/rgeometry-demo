@@ -357,7 +357,7 @@ impl TriangularNetwork {
         }
     }
 
-    fn check_invariant_tri(&self, idx: TriIdx) -> Result<()> {
+    fn check_invariant_tri(&self, idx: TriIdx, msg: &str) -> Result<()> {
         let t = self.tri(idx);
         for i in 0..3 {
             let i = SubIdx(i);
@@ -371,7 +371,8 @@ impl TriangularNetwork {
 
                 if violated {
                     anyhow::bail!(
-                        "invariant violated: {:?}={:?}, {:?}={:?}",
+                        "invariant violated: {}, {:?}={:?}, {:?}={:?}",
+                        msg,
                         idx,
                         t,
                         idx_neighbor,
@@ -385,7 +386,7 @@ impl TriangularNetwork {
 
     fn check_invariant(&self) -> Result<()> {
         for idx in 0..self.triangles.len() {
-            self.check_invariant_tri(TriIdx(idx))?;
+            self.check_invariant_tri(TriIdx(idx), "check_invariant")?;
         }
         Ok(())
     }
@@ -515,7 +516,9 @@ impl TriangularNetwork {
                     self.tri_mut(idx_neighbor).update_neighbor(idx_t0, idx_t2);
                 }
 
-                self.check_invariant()?;
+                self.check_invariant_tri(idx_t0, "InTriangle(t0)")?;
+                self.check_invariant_tri(idx_t1, "InTriangle(t1)")?;
+                self.check_invariant_tri(idx_t2, "InTriangle(t2)")?;
 
                 self.maybe_swap(idx_t0, reductions)?;
                 self.maybe_swap(idx_t1, reductions)?;
@@ -550,6 +553,12 @@ impl TriangularNetwork {
                 let v2 = t0.vert(idx_neighbor.cw());
                 let idx_v = self.add_vert(*p);
 
+                //       v2(v0)
+                //     t3     t2
+                // v1     idx_v    v1
+                //     t1     t0
+                //       v0(v2)
+
                 *self.tri_mut(idx_t0) = Triangle {
                     vertices: [idx_v, v0, v1],
                     neighbors: [Some(idx_t2), idx_t1, t0.neighbor(idx_neighbor.ccw())],
@@ -581,13 +590,13 @@ impl TriangularNetwork {
                     };
                 }
 
-                self.check_invariant_tri(idx_t0)?;
+                self.check_invariant_tri(idx_t0, "Colinear(t0)")?;
                 if let Some(idx_t1) = idx_t1 {
-                    self.check_invariant_tri(idx_t1)?;
+                    self.check_invariant_tri(idx_t1, "Colinear(t1)")?;
                 }
-                self.check_invariant_tri(idx_t2)?;
-                if let Some(idx_t3) = idx_t1 {
-                    self.check_invariant_tri(idx_t3)?;
+                self.check_invariant_tri(idx_t2, "Colinear(t2)")?;
+                if let Some(idx_t3) = idx_t3 {
+                    self.check_invariant_tri(idx_t3, "Colinear(t3)")?;
                 }
             }
 
