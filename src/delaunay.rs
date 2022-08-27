@@ -9,6 +9,8 @@ pub struct VertIdx(pub usize);
 #[derive(PartialEq, Eq, PartialOrd, Ord, Debug, Clone, Copy)]
 pub struct SubIdx(pub usize);
 
+type Result<T> = anyhow::Result<T>;
+
 impl SubIdx {
     pub fn ccw(self) -> Self {
         Self((self.0 + 1) % 3)
@@ -199,7 +201,7 @@ impl TriangularNetwork {
         Some(idx_self)
     }
 
-    pub fn cut_restore(&mut self, res: &CutResult) -> Vec<(VertIdx, VertIdx)> {
+    pub fn cut_restore(&mut self, res: &CutResult) -> Result<Vec<(VertIdx, VertIdx)>> {
         let mut out = Vec::new();
 
         let mut verts_ccw = Vec::new();
@@ -237,9 +239,9 @@ impl TriangularNetwork {
         if let Some(idx1) = idx1 {
             self.tri_mut(idx1).neighbors[0] = idx0;
         }
-        self.check_invariant();
+        self.check_invariant()?;
 
-        out
+        Ok(out)
     }
 
     pub fn cut(&self, v_from: VertIdx, v_to: VertIdx) -> CutResult {
@@ -355,37 +357,47 @@ impl TriangularNetwork {
         }
     }
 
-    fn check_invariant_tri(&self, idx: TriIdx) {
+    fn check_invariant_tri(&self, idx: TriIdx) -> Result<()> {
         let t = self.tri(idx);
         for i in 0..3 {
             let i = SubIdx(i);
             if let Some(idx_neighbor) = t.neighbor(i) {
                 let n = self.tri(idx_neighbor);
-                if let Some(j) = n.neighbor_idx(idx) {
-                    // eprintln!("{}={:?}, {}={:?}", idx, t, idx_neighbor, n);
-                    assert_eq!(t.vert(i), n.vert(j.cw()));
-                    assert_eq!(t.vert(i.cw()), n.vert(j));
+                let violated = if let Some(j) = n.neighbor_idx(idx) {
+                    t.vert(i) != n.vert(j.cw()) || t.vert(i.cw()) != n.vert(j)
                 } else {
-                    panic!("{:#?}", self);
+                    false
+                };
+
+                if violated {
+                    anyhow::bail!(
+                        "invariant violated: {:?}={:?}, {:?}={:?}",
+                        idx,
+                        t,
+                        idx_neighbor,
+                        n
+                    );
                 }
             }
         }
+        Ok(())
     }
 
-    fn check_invariant(&self) {
+    fn check_invariant(&self) -> Result<()> {
         for idx in 0..self.triangles.len() {
-            self.check_invariant_tri(TriIdx(idx));
+            self.check_invariant_tri(TriIdx(idx))?;
         }
+        Ok(())
     }
 
-    fn maybe_swap(&mut self, idx0: TriIdx, reductions: &mut usize) -> bool {
+    fn maybe_swap(&mut self, idx0: TriIdx, reductions: &mut usize) -> Result<bool> {
         let idx1 = match self.tri(idx0).neighbor(SubIdx(2)) {
             Some(idx) => idx,
-            None => return false,
+            None => return Ok(false),
         };
 
         if *reductions == 0 {
-            return false;
+            return Ok(false);
         }
         *reductions -= 1;
 
@@ -412,7 +424,7 @@ impl TriangularNetwork {
         let d3 = Point::orient_along_direction(p1, Direction::Through(p3), p2);
 
         if d0 == d1 || d2 == d3 {
-            return false;
+            return Ok(false);
         }
 
         let should_swap = if is_super(v0) || is_super(v2) {
@@ -426,7 +438,7 @@ impl TriangularNetwork {
         };
 
         if !should_swap {
-            return false;
+            return Ok(false);
         }
 
         // swap
@@ -453,19 +465,21 @@ impl TriangularNetwork {
             self.tri_mut(idx).update_neighbor(idx1, idx0);
         }
 
-        self.maybe_swap(idx0, reductions);
-        self.maybe_swap(idx1, reductions);
+        self.check_invariant()?;
 
-        self.check_invariant();
+        self.maybe_swap(idx0, reductions)?;
+        self.maybe_swap(idx1, reductions)?;
 
-        true
+        self.check_invariant()?;
+
+        Ok(true)
     }
 
-    pub fn insert(&mut self, p: &Point<f64>, reductions: &mut usize) {
+    pub fn insert(&mut self, p: &Point<f64>, reductions: &mut usize) -> Result<()> {
         use TriangularNetworkLocation::*;
 
         if *reductions == 0 {
-            return;
+            return Ok(());
         }
         *reductions -= 1;
 
@@ -501,43 +515,79 @@ impl TriangularNetwork {
                     self.tri_mut(idx_neighbor).update_neighbor(idx_t0, idx_t2);
                 }
 
-                self.maybe_swap(idx_t0, reductions);
-                self.maybe_swap(idx_t1, reductions);
-                self.maybe_swap(idx_t2, reductions);
+                self.check_invariant()?;
+
+                self.maybe_swap(idx_t0, reductions)?;
+                self.maybe_swap(idx_t1, reductions)?;
+                self.maybe_swap(idx_t2, reductions)?;
+
+                self.check_invariant()?;
             }
 
-            // TODO: add tests
             Colinear(idx_t, idx_neighbor) => {
-                let idx_v = self.add_vert(*p);
+                if p == self.tri_vert(idx_t, SubIdx(0))
+                    || p == self.tri_vert(idx_t, SubIdx(1))
+                    || p == self.tri_vert(idx_t, SubIdx(2))
+                {
+                    // ignore duplicated points
+                    return Ok(());
+                }
 
                 let idx_t0 = idx_t;
                 let t0 = self.tri(idx_t0).clone();
+
                 let idx_t1 = t0.neighbor(idx_neighbor);
 
                 let idx_t2 = self.add_tri();
-
-                let (t3, idx_t3) = if let Some(idx_t1) = idx_t1 {
-                    let t1 = self.tri(idx_t1).clone();
-                    let idx_neighbor_t1 = t1.neighbor_idx(idx_t);
-                    let t3 = self.tri_mut(idx_t1).split(
-                        idx_t1,
-                        idx_neighbor_t1.unwrap(),
-                        idx_v,
-                        idx_t2,
-                        Some(idx_t2),
-                    );
-                    (Some(t3), Some(self.add_tri()))
+                let idx_t3 = if idx_t1.is_some() {
+                    Some(self.add_tri())
                 } else {
-                    (None, None)
+                    None
                 };
 
-                let t2 = self
-                    .tri_mut(idx_t0)
-                    .split(idx_t0, idx_neighbor, idx_v, idx_t2, idx_t3);
+                let v0 = t0.vert(idx_neighbor);
+                let v1 = t0.vert(idx_neighbor.ccw());
+                let v2 = t0.vert(idx_neighbor.cw());
+                let idx_v = self.add_vert(*p);
 
-                *self.tri_mut(idx_t2) = t2;
-                if let Some(t3) = t3 {
-                    *self.tri_mut(idx_t3.unwrap()) = t3;
+                *self.tri_mut(idx_t0) = Triangle {
+                    vertices: [idx_v, v0, v1],
+                    neighbors: [Some(idx_t2), idx_t1, t0.neighbor(idx_neighbor.ccw())],
+                };
+
+                *self.tri_mut(idx_t2) = Triangle {
+                    vertices: [idx_v, v1, v2],
+                    neighbors: [idx_t3, Some(idx_t0), t0.neighbor(idx_neighbor.cw())],
+                };
+
+                if let Some(idx_t1) = idx_t1 {
+                    let idx_t3 = idx_t3.unwrap();
+
+                    let t1 = self.tri(idx_t1).clone();
+                    let idx_neighbor = t1.neighbor_idx(idx_t).unwrap();
+
+                    let v0 = t1.vert(idx_neighbor);
+                    let v1 = t1.vert(idx_neighbor.ccw());
+                    let v2 = t1.vert(idx_neighbor.cw());
+
+                    *self.tri_mut(idx_t1) = Triangle {
+                        vertices: [idx_v, v1, v2],
+                        neighbors: [Some(idx_t0), Some(idx_t3), t1.neighbor(idx_neighbor.cw())],
+                    };
+
+                    *self.tri_mut(idx_t3) = Triangle {
+                        vertices: [idx_v, v0, v1],
+                        neighbors: [Some(idx_t1), Some(idx_t2), t1.neighbor(idx_neighbor.ccw())],
+                    };
+                }
+
+                self.check_invariant_tri(idx_t0)?;
+                if let Some(idx_t1) = idx_t1 {
+                    self.check_invariant_tri(idx_t1)?;
+                }
+                self.check_invariant_tri(idx_t2)?;
+                if let Some(idx_t3) = idx_t1 {
+                    self.check_invariant_tri(idx_t3)?;
                 }
             }
 
@@ -546,7 +596,7 @@ impl TriangularNetwork {
             }
         }
 
-        self.check_invariant();
+        self.check_invariant()
     }
 
     fn locate(&self, start: TriIdx, p: &Point<f64>) -> TriangularNetworkLocation {
@@ -636,26 +686,6 @@ impl Triangle {
             .iter()
             .position(|p| *p == Some(idx))
             .map(SubIdx)
-    }
-
-    // split triangle
-    fn split(
-        &mut self,
-        idx_self: TriIdx,
-        idx_neighbor: SubIdx,
-        idx_vert: VertIdx,
-        idx_new_tri: TriIdx,
-        idx_neighbor_new: Option<TriIdx>,
-    ) -> Triangle {
-        let mut t = self.clone();
-        t.neighbors[idx_neighbor.0] = idx_neighbor_new;
-        t.neighbors[idx_neighbor.ccw().0] = Some(idx_self);
-        t.vertices[idx_neighbor.0] = idx_vert;
-
-        self.vertices[idx_neighbor.cw().0] = idx_vert;
-        self.neighbors[idx_neighbor.cw().0] = Some(idx_new_tri);
-
-        t
     }
 }
 

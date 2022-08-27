@@ -32,7 +32,10 @@ fn gen_delaunay(view: f64, points: &[Point<f64>], reductions: usize) -> (Triangu
 
     let mut r = reductions;
     for p in points {
-        t.insert(&p, &mut r);
+        if let Err(e) = t.insert(&p, &mut r) {
+            eprintln!("{:?}", e);
+            break;
+        }
     }
     let used = reductions - r;
 

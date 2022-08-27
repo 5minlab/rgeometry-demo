@@ -36,10 +36,16 @@ fn gen_delaunay(
 
     let mut r = std::usize::MAX;
     for p in points_constrained {
-        t.insert(&p, &mut r);
+        if let Err(e) = t.insert(&p, &mut r) {
+            eprintln!("TriangularNetwork::insert: {:?}", e);
+            return t;
+        }
     }
     for p in points {
-        t.insert(&p, &mut r);
+        if let Err(e) = t.insert(&p, &mut r) {
+            eprintln!("TriangularNetwork::insert: {:?}", e);
+            return t;
+        }
     }
 
     t
