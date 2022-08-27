@@ -153,19 +153,33 @@ impl Demo for DemoDelaunay {
             );
         }
 
-        let p_c_ccw = v
-            .contour_ccw
-            .iter()
-            .map(|p| pt_egui(&net.vertices[*p]))
-            .collect();
-        plot_ui.line(plot::Line::new(PlotPoints::Owned(p_c_ccw)).color(Color32::BLUE));
+        for (t_idx, idx) in v.contour_ccw {
+            let t = &net.triangles[t_idx];
+            let v_from = t.vertices[(idx + 2) % 3];
+            let v_to = t.vertices[idx];
 
-        let p_c_cw = v
-            .contour_cw
-            .iter()
-            .map(|p| pt_egui(&net.vertices[*p]))
-            .collect();
-        plot_ui.line(plot::Line::new(PlotPoints::Owned(p_c_cw)).color(Color32::YELLOW));
+            let p_from = &net.vertices[v_from];
+            let p_to = &net.vertices[v_to];
+
+            plot_ui.line(
+                plot::Line::new(PlotPoints::Owned(vec![pt_egui(&p_from), pt_egui(&p_to)]))
+                    .color(Color32::BLUE),
+            );
+        }
+
+        for (t_idx, idx) in v.contour_cw {
+            let t = &net.triangles[t_idx];
+            let v_from = t.vertices[(idx + 2) % 3];
+            let v_to = t.vertices[idx];
+
+            let p_from = &net.vertices[v_from];
+            let p_to = &net.vertices[v_to];
+
+            plot_ui.line(
+                plot::Line::new(PlotPoints::Owned(vec![pt_egui(&p_from), pt_egui(&p_to)]))
+                    .color(Color32::YELLOW),
+            );
+        }
 
         plot_ui.points(plot::Points::new(PlotPoints::Owned(
             net.vertices.iter().skip(3).map(|v| pt_egui(v)).collect(),

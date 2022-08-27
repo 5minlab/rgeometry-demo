@@ -51,8 +51,8 @@ fn is_super(idx: usize) -> bool {
 pub struct CutResult {
     pub cuts: Vec<(usize, usize)>,
     pub cut_triangles: Vec<usize>,
-    pub contour_cw: Vec<usize>,
-    pub contour_ccw: Vec<usize>,
+    pub contour_cw: Vec<(usize, usize)>,
+    pub contour_ccw: Vec<(usize, usize)>,
 }
 
 impl TriangularNetwork {
@@ -107,8 +107,8 @@ impl TriangularNetwork {
 
         let mut cuts = vec![(v_from, v_to)];
         let mut cut_triangles = vec![];
-        let mut contour_cw = vec![v_from];
-        let mut contour_ccw = vec![v_from];
+        let mut contour_cw = vec![];
+        let mut contour_ccw = vec![];
 
         let p_start = &self.vertices[v_from];
         let p_end = &self.vertices[v_to];
@@ -135,14 +135,13 @@ impl TriangularNetwork {
                     let t = &self.triangles[t_idx];
 
                     let v0 = t.vertices[idx];
+                    contour_cw.push((t_idx, (idx + 1) % 3));
+                    contour_ccw.push((t_idx, idx));
                     if v0 == v_to {
                         break;
                     }
                     let v1 = t.vertices[(idx + 1) % 3];
                     let v2 = t.vertices[(idx + 2) % 3];
-
-                    contour_cw.push(v1);
-                    contour_ccw.push(v2);
 
                     cuts.push((v1, v2));
 
@@ -176,28 +175,29 @@ impl TriangularNetwork {
                     // should not colineaer
                     let d2 = Point::orient_along_direction(p_start, Direction::Through(p_end), p2);
 
-                    let (idx_from, idx_to) = if d1 == CoLinear {
+                    let idx_n = if d1 == CoLinear {
+                        contour_ccw.push((t_idx, (idx + 2) % 3));
+                        contour_cw.push((t_idx, (idx + 1) % 3));
                         cur = self
                             .find_vert_dest(v1, v_to)
                             .map(|(t_idx, idx)| CutIter::FromVertex(t_idx, idx));
                         continue;
                     } else if d1.reverse() == d0 {
-                        (idx, (idx + 1) % 3)
+                        contour_ccw.push((t_idx, (idx + 2) % 3));
+                        (idx + 1) % 3
                     } else if d1.reverse() == d2 {
-                        ((idx + 1) % 3, (idx + 2) % 3)
+                        contour_cw.push((t_idx, (idx + 1) % 3));
+                        (idx + 2) % 3
                     } else {
                         todo!();
                     };
 
-                    let v_t_from = t.vertices[idx_from];
-                    let v_t_to = t.vertices[idx_to];
-
-                    contour_cw.push(v_t_from);
-                    contour_ccw.push(v_t_to);
+                    let v_t_from = t.vertices[(idx_n + 2) % 3];
+                    let v_t_to = t.vertices[idx_n % 3];
 
                     cuts.push((v_t_from, v_t_to));
 
-                    if let Some(idx_neighbor) = t.neighbors[idx_to] {
+                    if let Some(idx_neighbor) = t.neighbors[idx_n] {
                         let t_neighbor = &self.triangles[idx_neighbor];
                         let idx = t_neighbor.neighbor_idx(t_idx).unwrap();
                         cur = Some(CutIter::ToEdge(idx_neighbor, idx));
@@ -207,9 +207,6 @@ impl TriangularNetwork {
                 }
             }
         }
-
-        contour_cw.push(v_to);
-        contour_ccw.push(v_to);
 
         CutResult {
             cuts,
