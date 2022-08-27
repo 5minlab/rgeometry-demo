@@ -183,10 +183,10 @@ impl Default for MyApp {
         let view = 30f64;
 
         let demos: Vec<Box<dyn Demo>> = vec![
-            Box::new(boolean_tri::DemoBooleanTri::new(view)),
-            Box::new(boolean::DemoBoolean::new(view)),
             Box::new(delaunay::DemoDelaunay::new(view)),
             Box::new(cdt::DemoCDT::new(view)),
+            Box::new(boolean::DemoBoolean::new(view)),
+            Box::new(boolean_tri::DemoBooleanTri::new(view)),
             Box::new(gridnet::DemoGridNet::new(view)),
         ];
         let selected = demos[0].name();
