@@ -11,6 +11,7 @@ use eframe::{
 use rgeometry::data::{Point, Polygon, Vector};
 
 mod boolean;
+mod cdt;
 mod delaunay;
 mod gridnet;
 
@@ -139,6 +140,7 @@ impl Default for MyApp {
         let view = 30f64;
 
         let demos: Vec<Box<dyn Demo>> = vec![
+            Box::new(cdt::DemoCDT::new(view)),
             Box::new(delaunay::DemoDelaunay::new(view)),
             Box::new(boolean::DemoBoolean::new(view)),
             Box::new(gridnet::DemoGridNet::new(view)),
