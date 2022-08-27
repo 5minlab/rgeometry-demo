@@ -1,5 +1,5 @@
 use super::{pt_egui, Demo};
-use crate::delaunay::TriangularNetwork;
+use crate::delaunay::*;
 use eframe::egui::{
     self,
     epaint::Color32,
@@ -117,18 +117,20 @@ impl Demo for DemoDelaunay {
 
     fn plot_ui(&self, plot_ui: &mut PlotUi) {
         let net = &self.net;
-        let v = net.cut(3, self.net.vertices.len() - 1);
+
+        let v = net.cut(VertIdx(3), VertIdx(self.net.vertices.len() - 1));
 
         for (t_idx, t) in net.triangles.iter().enumerate() {
+            let t_idx = TriIdx(t_idx);
             if let Some(_) = v.cut_triangles.iter().find(|t0| **t0 == t_idx) {
                 continue;
             }
 
             let [v0, v1, v2] = t.vertices;
-            let p0 = net.vertices[v0];
-            let p1 = net.vertices[v1];
-            let p2 = net.vertices[v2];
-            if !self.opt_render_outer_tri && (v0 < 3 || v1 < 3 || v2 < 3) {
+            let p0 = net.vert(v0);
+            let p1 = net.vert(v1);
+            let p2 = net.vert(v2);
+            if !self.opt_render_outer_tri && (is_super(v0) || is_super(v1) || is_super(v2)) {
                 continue;
             }
 
@@ -144,8 +146,8 @@ impl Demo for DemoDelaunay {
         }
 
         for (from, to) in v.cuts {
-            let v_from = &net.vertices[from];
-            let v_to = &net.vertices[to];
+            let v_from = net.vert(from);
+            let v_to = net.vert(to);
 
             plot_ui.line(
                 plot::Line::new(PlotPoints::Owned(vec![pt_egui(&v_from), pt_egui(&v_to)]))
@@ -154,12 +156,8 @@ impl Demo for DemoDelaunay {
         }
 
         for (t_idx, idx) in v.contour_ccw {
-            let t = &net.triangles[t_idx];
-            let v_from = t.vertices[(idx + 2) % 3];
-            let v_to = t.vertices[idx];
-
-            let p_from = &net.vertices[v_from];
-            let p_to = &net.vertices[v_to];
+            let p_from = net.tri_vert(t_idx, idx.cw());
+            let p_to = net.tri_vert(t_idx, idx);
 
             plot_ui.line(
                 plot::Line::new(PlotPoints::Owned(vec![pt_egui(&p_from), pt_egui(&p_to)]))
@@ -168,12 +166,8 @@ impl Demo for DemoDelaunay {
         }
 
         for (t_idx, idx) in v.contour_cw {
-            let t = &net.triangles[t_idx];
-            let v_from = t.vertices[(idx + 2) % 3];
-            let v_to = t.vertices[idx];
-
-            let p_from = &net.vertices[v_from];
-            let p_to = &net.vertices[v_to];
+            let p_from = net.tri_vert(t_idx, idx.cw());
+            let p_to = net.tri_vert(t_idx, idx);
 
             plot_ui.line(
                 plot::Line::new(PlotPoints::Owned(vec![pt_egui(&p_from), pt_egui(&p_to)]))

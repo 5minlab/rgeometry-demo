@@ -1,18 +1,36 @@
 // https://www.personal.psu.edu/cxc11/AERSP560/DELAUNEY/13_Two_algorithms_Delauney.pdf
 use rgeometry::{data::*, Orientation};
 
-#[derive(Debug)]
-pub struct TriangularNetwork {
-    pub vertices: Vec<Point<f64>>,
-    pub triangles: Vec<Triangle>,
+#[derive(PartialEq, Eq, PartialOrd, Ord, Debug, Clone, Copy)]
+pub struct TriIdx(pub usize);
+#[derive(PartialEq, Eq, PartialOrd, Ord, Debug, Clone, Copy)]
+pub struct VertIdx(pub usize);
+
+#[derive(PartialEq, Eq, PartialOrd, Ord, Debug, Clone, Copy)]
+pub struct SubIdx(pub usize);
+
+impl SubIdx {
+    pub fn ccw(self) -> Self {
+        Self((self.0 + 1) % 3)
+    }
+    pub fn cw(self) -> Self {
+        Self((self.0 + 2) % 3)
+    }
+}
+
+pub struct CutResult {
+    pub cuts: Vec<(VertIdx, VertIdx)>,
+    pub cut_triangles: Vec<TriIdx>,
+    pub contour_cw: Vec<(TriIdx, SubIdx)>,
+    pub contour_ccw: Vec<(TriIdx, SubIdx)>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
 enum TriangularNetworkLocation {
-    InTriangle(usize),
+    InTriangle(TriIdx),
     // colinear with edge
-    Colinear(usize, usize),
-    Outside(usize, usize),
+    Colinear(TriIdx, SubIdx),
+    Outside(TriIdx, SubIdx),
 }
 
 fn det2(v: [f64; 4]) -> f64 {
@@ -44,15 +62,14 @@ fn inside_circle(a: &Point<f64>, b: &Point<f64>, c: &Point<f64>, d: &Point<f64>)
     ]) > 0.0
 }
 
-fn is_super(idx: usize) -> bool {
-    idx < 3
+pub fn is_super(idx: VertIdx) -> bool {
+    idx.0 < 3
 }
 
-pub struct CutResult {
-    pub cuts: Vec<(usize, usize)>,
-    pub cut_triangles: Vec<usize>,
-    pub contour_cw: Vec<(usize, usize)>,
-    pub contour_ccw: Vec<(usize, usize)>,
+#[derive(Debug)]
+pub struct TriangularNetwork {
+    pub vertices: Vec<Point<f64>>,
+    pub triangles: Vec<Triangle>,
 }
 
 impl TriangularNetwork {
@@ -67,26 +84,39 @@ impl TriangularNetwork {
         Self {
             vertices: vec![p0, p1, p2],
             triangles: vec![Triangle {
-                vertices: [0, 1, 2],
+                vertices: [VertIdx(0), VertIdx(1), VertIdx(2)],
                 neighbors: [None, None, None],
             }],
         }
     }
 
-    pub fn find_vert_dest(&self, v_from: usize, v_to: usize) -> Option<(usize, usize)> {
+    pub fn tri(&self, idx: TriIdx) -> &Triangle {
+        &self.triangles[idx.0]
+    }
+
+    pub fn tri_mut(&mut self, idx: TriIdx) -> &mut Triangle {
+        &mut self.triangles[idx.0]
+    }
+
+    pub fn vert(&self, idx: VertIdx) -> &Point<f64> {
+        &self.vertices[idx.0]
+    }
+
+    pub fn tri_vert(&self, tri_idx: TriIdx, idx: SubIdx) -> &Point<f64> {
+        self.vert(self.tri(tri_idx).vertices[idx.0])
+    }
+
+    pub fn find_vert_dest(&self, v_from: VertIdx, v_to: VertIdx) -> Option<(TriIdx, SubIdx)> {
         use Orientation::*;
 
-        let p_end = &self.vertices[v_to];
+        let p_end = self.vert(v_to);
 
         for (t_idx, t) in self.triangles.iter().enumerate() {
+            let t_idx = TriIdx(t_idx);
             if let Some(idx) = t.vertex_idx(v_from) {
-                let v0 = t.vertices[idx];
-                let v1 = t.vertices[(idx + 1) % 3];
-                let v2 = t.vertices[(idx + 2) % 3];
-
-                let p0 = &self.vertices[v0];
-                let p1 = &self.vertices[v1];
-                let p2 = &self.vertices[v2];
+                let p0 = self.tri_vert(t_idx, idx);
+                let p1 = self.tri_vert(t_idx, idx.ccw());
+                let p2 = self.tri_vert(t_idx, idx.cw());
 
                 let d0 = Point::orient_along_direction(p0, Direction::Through(p1), p_end);
                 let d1 = Point::orient_along_direction(p0, Direction::Through(p2), p_end);
@@ -102,7 +132,7 @@ impl TriangularNetwork {
         None
     }
 
-    pub fn cut(&self, v_from: usize, v_to: usize) -> CutResult {
+    pub fn cut(&self, v_from: VertIdx, v_to: VertIdx) -> CutResult {
         use Orientation::*;
 
         let mut cuts = vec![(v_from, v_to)];
@@ -110,13 +140,13 @@ impl TriangularNetwork {
         let mut contour_cw = vec![];
         let mut contour_ccw = vec![];
 
-        let p_start = &self.vertices[v_from];
-        let p_end = &self.vertices[v_to];
+        let p_start = self.vert(v_from);
+        let p_end = self.vert(v_to);
 
         #[derive(Debug)]
         enum CutIter {
-            FromVertex(usize, usize),
-            ToEdge(usize, usize),
+            FromVertex(TriIdx, SubIdx),
+            ToEdge(TriIdx, SubIdx),
         }
 
         let mut cur = {
@@ -132,22 +162,22 @@ impl TriangularNetwork {
                 CutIter::FromVertex(t_idx, idx) => {
                     cut_triangles.push(t_idx);
 
-                    let t = &self.triangles[t_idx];
+                    let t = self.tri(t_idx);
 
-                    let v0 = t.vertices[idx];
-                    contour_cw.push((t_idx, (idx + 1) % 3));
+                    let v0 = t.vertices[idx.0];
                     contour_ccw.push((t_idx, idx));
+                    contour_cw.push((t_idx, idx.ccw()));
                     if v0 == v_to {
                         break;
                     }
-                    let v1 = t.vertices[(idx + 1) % 3];
-                    let v2 = t.vertices[(idx + 2) % 3];
+                    let v1 = t.vert(idx.ccw());
+                    let v2 = t.vert(idx.cw());
 
                     cuts.push((v1, v2));
 
-                    match t.neighbors[(idx + 2) % 3] {
+                    match t.neighbor(idx.cw()) {
                         Some(neighbor) => {
-                            let t_neighbor = &self.triangles[neighbor];
+                            let t_neighbor = self.tri(neighbor);
                             if let Some(idx_neighbor) = t_neighbor.neighbor_idx(t_idx) {
                                 cur = Some(CutIter::ToEdge(neighbor, idx_neighbor));
                             } else {
@@ -160,14 +190,13 @@ impl TriangularNetwork {
                 CutIter::ToEdge(t_idx, idx) => {
                     cut_triangles.push(t_idx);
 
-                    let t = &self.triangles[t_idx];
-                    let v0 = t.vertices[idx];
-                    let v1 = t.vertices[(idx + 1) % 3];
-                    let v2 = t.vertices[(idx + 2) % 3];
+                    let t = self.tri(t_idx);
 
-                    let p0 = &self.vertices[v0];
-                    let p1 = &self.vertices[v1];
-                    let p2 = &self.vertices[v2];
+                    let v1 = t.vert(idx.ccw());
+
+                    let p0 = self.tri_vert(t_idx, idx);
+                    let p1 = self.tri_vert(t_idx, idx.ccw());
+                    let p2 = self.tri_vert(t_idx, idx.cw());
 
                     // should not colinear
                     let d0 = Point::orient_along_direction(p_start, Direction::Through(p_end), p0);
@@ -176,29 +205,29 @@ impl TriangularNetwork {
                     let d2 = Point::orient_along_direction(p_start, Direction::Through(p_end), p2);
 
                     let idx_n = if d1 == CoLinear {
-                        contour_ccw.push((t_idx, (idx + 2) % 3));
-                        contour_cw.push((t_idx, (idx + 1) % 3));
+                        contour_ccw.push((t_idx, idx.cw()));
+                        contour_cw.push((t_idx, idx.ccw()));
                         cur = self
                             .find_vert_dest(v1, v_to)
                             .map(|(t_idx, idx)| CutIter::FromVertex(t_idx, idx));
                         continue;
                     } else if d1.reverse() == d0 {
-                        contour_ccw.push((t_idx, (idx + 2) % 3));
-                        (idx + 1) % 3
+                        contour_ccw.push((t_idx, idx.cw()));
+                        idx.ccw()
                     } else if d1.reverse() == d2 {
-                        contour_cw.push((t_idx, (idx + 1) % 3));
-                        (idx + 2) % 3
+                        contour_cw.push((t_idx, idx.ccw()));
+                        idx.cw()
                     } else {
                         todo!();
                     };
 
-                    let v_t_from = t.vertices[(idx_n + 2) % 3];
-                    let v_t_to = t.vertices[idx_n % 3];
+                    let v_t_from = t.vert(idx_n.cw());
+                    let v_t_to = t.vert(idx_n);
 
                     cuts.push((v_t_from, v_t_to));
 
-                    if let Some(idx_neighbor) = t.neighbors[idx_n] {
-                        let t_neighbor = &self.triangles[idx_neighbor];
+                    if let Some(idx_neighbor) = t.neighbor(idx_n) {
+                        let t_neighbor = self.tri(idx_neighbor);
                         let idx = t_neighbor.neighbor_idx(t_idx).unwrap();
                         cur = Some(CutIter::ToEdge(idx_neighbor, idx));
                     } else {
@@ -216,15 +245,16 @@ impl TriangularNetwork {
         }
     }
 
-    fn check_invariant_tri(&self, idx: usize) {
-        let t = &self.triangles[idx];
+    fn check_invariant_tri(&self, idx: TriIdx) {
+        let t = self.tri(idx);
         for i in 0..3 {
-            if let Some(idx_neighbor) = t.neighbors[i] {
-                let n = &self.triangles[idx_neighbor];
+            let i = SubIdx(i);
+            if let Some(idx_neighbor) = t.neighbor(i) {
+                let n = self.tri(idx_neighbor);
                 if let Some(j) = n.neighbor_idx(idx) {
                     // eprintln!("{}={:?}, {}={:?}", idx, t, idx_neighbor, n);
-                    assert_eq!(t.vertices[i], n.vertices[(j + 2) % 3]);
-                    assert_eq!(t.vertices[(i + 2) % 3], n.vertices[j]);
+                    assert_eq!(t.vert(i), n.vert(j.cw()));
+                    assert_eq!(t.vert(i.cw()), n.vert(j));
                 } else {
                     panic!("{:#?}", self);
                 }
@@ -234,12 +264,12 @@ impl TriangularNetwork {
 
     fn check_invariant(&self) {
         for idx in 0..self.triangles.len() {
-            self.check_invariant_tri(idx);
+            self.check_invariant_tri(TriIdx(idx));
         }
     }
 
-    fn maybe_swap(&mut self, idx0: usize, reductions: &mut usize) -> bool {
-        let idx1 = match self.triangles[idx0].neighbors[2] {
+    fn maybe_swap(&mut self, idx0: TriIdx, reductions: &mut usize) -> bool {
+        let idx1 = match self.triangles[idx0.0].neighbors[2] {
             Some(idx) => idx,
             None => return false,
         };
@@ -249,21 +279,21 @@ impl TriangularNetwork {
         }
         *reductions -= 1;
 
-        let t0 = &self.triangles[idx0];
-        let t1 = &self.triangles[idx1];
+        let t0 = self.tri(idx0);
+        let t1 = self.tri(idx1);
 
-        let t0_t1_idx = 2;
+        let t0_t1_idx = SubIdx(2);
         let t1_t0_idx = t1.neighbor_idx(idx0).unwrap();
 
-        let v0 = t0.vertices[t0_t1_idx];
-        let v1 = t0.vertices[(t0_t1_idx + 1) % 3];
-        let v2 = t0.vertices[(t0_t1_idx + 2) % 3];
-        let v3 = t1.vertices[(t1_t0_idx + 1) % 3];
+        let v0 = t0.vert(t0_t1_idx);
+        let v1 = t0.vert(t0_t1_idx.ccw());
+        let v2 = t0.vert(t0_t1_idx.cw());
+        let v3 = t1.vert(t1_t0_idx.ccw());
 
-        let p0 = &self.vertices[v0];
-        let p1 = &self.vertices[v1];
-        let p2 = &self.vertices[v2];
-        let p3 = &self.vertices[v3];
+        let p0 = self.vert(v0);
+        let p1 = self.vert(v1);
+        let p2 = self.vert(v2);
+        let p3 = self.vert(v3);
 
         // check if four points are convex in order
         let d0 = Point::orient_along_direction(p0, Direction::Through(p2), p1);
@@ -290,27 +320,27 @@ impl TriangularNetwork {
         }
 
         // swap
-        let n0 = t1.neighbors[(t1_t0_idx + 2) % 3];
-        let n1 = t0.neighbors[(t0_t1_idx + 1) % 3];
-        let n2 = t0.neighbors[(t0_t1_idx + 2) % 3];
-        let n3 = t1.neighbors[(t1_t0_idx + 1) % 3];
+        let n0 = t1.neighbor(t1_t0_idx.cw());
+        let n1 = t0.neighbor(t0_t1_idx.ccw());
+        let n2 = t0.neighbor(t0_t1_idx.cw());
+        let n3 = t1.neighbor(t1_t0_idx.ccw());
 
-        self.triangles[idx0] = Triangle {
+        *self.tri_mut(idx0) = Triangle {
             vertices: [v1, v2, v3],
             neighbors: [Some(idx1), n2, n3],
         };
 
-        self.triangles[idx1] = Triangle {
+        *self.tri_mut(idx1) = Triangle {
             vertices: [v1, v3, v0],
             neighbors: [n1, Some(idx0), n0],
         };
 
         // n0, n2 stays same, n1, n3 changes neighbor
         if let Some(idx) = n1 {
-            self.triangles[idx].update_neighbor(idx0, idx1);
+            self.tri_mut(idx).update_neighbor(idx0, idx1);
         }
         if let Some(idx) = n3 {
-            self.triangles[idx].update_neighbor(idx1, idx0);
+            self.tri_mut(idx).update_neighbor(idx1, idx0);
         }
 
         self.maybe_swap(idx0, reductions);
@@ -331,19 +361,19 @@ impl TriangularNetwork {
 
         match self.locate_recursive(p) {
             InTriangle(idx_t) => {
-                let idx_v = self.vertices.len();
+                let idx_v = VertIdx(self.vertices.len());
                 self.vertices.push(*p);
 
-                let t = self.triangles[idx_t].clone();
+                let t = self.triangles[idx_t.0].clone();
 
                 let idx_t0 = idx_t;
-                let idx_t1 = self.triangles.len();
-                let idx_t2 = idx_t1 + 1;
+                let idx_t1 = TriIdx(self.triangles.len());
+                let idx_t2 = TriIdx(idx_t1.0 + 1);
 
                 let [v0, v1, v2] = t.vertices;
                 let [n0, n1, n2] = t.neighbors;
 
-                self.triangles[idx_t0] = Triangle {
+                self.triangles[idx_t0.0] = Triangle {
                     vertices: [idx_v, v0, v1],
                     neighbors: [Some(idx_t1), Some(idx_t2), n1],
                 };
@@ -357,10 +387,10 @@ impl TriangularNetwork {
                 });
 
                 if let Some(idx_neighbor) = n2 {
-                    self.triangles[idx_neighbor].update_neighbor(idx_t0, idx_t1);
+                    self.triangles[idx_neighbor.0].update_neighbor(idx_t0, idx_t1);
                 }
                 if let Some(idx_neighbor) = n0 {
-                    self.triangles[idx_neighbor].update_neighbor(idx_t0, idx_t2);
+                    self.triangles[idx_neighbor.0].update_neighbor(idx_t0, idx_t2);
                 }
 
                 self.maybe_swap(idx_t0, reductions);
@@ -370,31 +400,33 @@ impl TriangularNetwork {
 
             // TODO: add tests
             Colinear(idx_t, idx_neighbor) => {
-                let idx_v = self.vertices.len();
+                let idx_v = VertIdx(self.vertices.len());
                 self.vertices.push(*p);
 
                 let idx_t0 = idx_t;
-                let t0 = self.triangles[idx_t0].clone();
-                let idx_t1 = t0.neighbors[idx_neighbor];
+                let t0 = self.tri(idx_t0).clone();
+                let idx_t1 = t0.neighbor(idx_neighbor);
 
-                let idx_t2 = self.triangles.len();
+                let idx_t2 = TriIdx(self.triangles.len());
 
                 let (t3, idx_t3) = if let Some(idx_t1) = idx_t1 {
-                    let t1 = self.triangles[idx_t1].clone();
-                    let idx_neighbor_t1 = t1.neighbors.iter().position(|p| p == &Some(idx_t));
-                    let t3 = self.triangles[idx_t1].split(
+                    let t1 = self.tri(idx_t1).clone();
+                    let idx_neighbor_t1 = t1.neighbor_idx(idx_t);
+                    let t3 = self.tri_mut(idx_t1).split(
                         idx_t1,
                         idx_neighbor_t1.unwrap(),
                         idx_v,
                         idx_t2,
                         Some(idx_t2),
                     );
-                    (Some(t3), Some(idx_t2 + 1))
+                    (Some(t3), Some(TriIdx(idx_t2.0 + 1)))
                 } else {
                     (None, None)
                 };
 
-                let t2 = self.triangles[idx_t0].split(idx_t0, idx_neighbor, idx_v, idx_t2, idx_t3);
+                let t2 = self
+                    .tri_mut(idx_t0)
+                    .split(idx_t0, idx_neighbor, idx_v, idx_t2, idx_t3);
 
                 self.triangles.push(t2);
                 if let Some(t3) = t3 {
@@ -412,14 +444,14 @@ impl TriangularNetwork {
         self.check_invariant();
     }
 
-    fn locate(&self, start: usize, p: &Point<f64>) -> TriangularNetworkLocation {
+    fn locate(&self, start: TriIdx, p: &Point<f64>) -> TriangularNetworkLocation {
         use Orientation::*;
         use TriangularNetworkLocation::*;
 
-        let t = &self.triangles[start];
-        let p0 = &self.vertices[t.vertices[0]];
-        let p1 = &self.vertices[t.vertices[1]];
-        let p2 = &self.vertices[t.vertices[2]];
+        let t = &self.triangles[start.0];
+        let p0 = &self.vertices[t.vertices[0].0];
+        let p1 = &self.vertices[t.vertices[1].0];
+        let p2 = &self.vertices[t.vertices[2].0];
 
         // 0, self <- ccw | cw -> 1
         let d0 = Point::orient_along_direction(p0, Direction::Through(p1), p);
@@ -431,18 +463,18 @@ impl TriangularNetwork {
         match (d0, d1, d2) {
             (CounterClockWise, CounterClockWise, CounterClockWise) => return InTriangle(start),
             // handle cw case first
-            (ClockWise, _, _) => Outside(start, 1),
-            (_, ClockWise, _) => Outside(start, 2),
-            (_, _, ClockWise) => Outside(start, 0),
+            (ClockWise, _, _) => Outside(start, SubIdx(1)),
+            (_, ClockWise, _) => Outside(start, SubIdx(2)),
+            (_, _, ClockWise) => Outside(start, SubIdx(0)),
             // TODO: (Colinear, Colinear, _) -> exact point?
-            (CoLinear, _, _) => Colinear(start, 1),
-            (_, CoLinear, _) => Colinear(start, 2),
-            (_, _, CoLinear) => Colinear(start, 0),
+            (CoLinear, _, _) => Colinear(start, SubIdx(1)),
+            (_, CoLinear, _) => Colinear(start, SubIdx(2)),
+            (_, _, CoLinear) => Colinear(start, SubIdx(0)),
         }
     }
 
     fn locate_recursive(&self, p: &Point<f64>) -> TriangularNetworkLocation {
-        let mut start = 0;
+        let mut start = TriIdx(0);
 
         loop {
             use TriangularNetworkLocation::*;
@@ -450,7 +482,7 @@ impl TriangularNetwork {
             start = match self.locate(start, p) {
                 InTriangle(idx) => return InTriangle(idx),
                 Colinear(idx, idx_neighbor) => return Colinear(idx, idx_neighbor),
-                Outside(idx, idx_neighbor) => match self.triangles[idx].neighbors[idx_neighbor] {
+                Outside(idx, idx_neighbor) => match self.tri(idx).neighbor(idx_neighbor) {
                     Some(idx) => idx,
                     None => {
                         eprintln!("{:#?}, {:?}", self, p);
@@ -466,14 +498,22 @@ impl TriangularNetwork {
 #[derive(Clone, Debug)]
 pub struct Triangle {
     // counterclockwise
-    pub vertices: [usize; 3],
+    pub vertices: [VertIdx; 3],
     //  - self, neighbors[0], neighbors[1] meets at vertices[0], counterclockwise
     //  - vertices[0], vertices[1] meets with neighbors[1], ...
-    neighbors: [Option<usize>; 3],
+    neighbors: [Option<TriIdx>; 3],
 }
 
 impl Triangle {
-    fn update_neighbor(&mut self, idx_from: usize, idx_to: usize) -> bool {
+    pub fn vert(&self, idx: SubIdx) -> VertIdx {
+        self.vertices[idx.0]
+    }
+
+    fn neighbor(&self, idx: SubIdx) -> Option<TriIdx> {
+        self.neighbors[idx.0]
+    }
+
+    fn update_neighbor(&mut self, idx_from: TriIdx, idx_to: TriIdx) -> bool {
         for i in 0..3 {
             if self.neighbors[i] == Some(idx_from) {
                 self.neighbors[i] = Some(idx_to);
@@ -483,19 +523,19 @@ impl Triangle {
         todo!();
     }
 
-    fn vertex_idx(&self, v_idx: usize) -> Option<usize> {
+    fn vertex_idx(&self, v_idx: VertIdx) -> Option<SubIdx> {
         for i in 0..3 {
             if self.vertices[i] == v_idx {
-                return Some(i);
+                return Some(SubIdx(i));
             }
         }
         None
     }
 
-    fn neighbor_idx(&self, idx: usize) -> Option<usize> {
+    fn neighbor_idx(&self, idx: TriIdx) -> Option<SubIdx> {
         for i in 0..3 {
             if self.neighbors[i] == Some(idx) {
-                return Some(i);
+                return Some(SubIdx(i));
             }
         }
         None
@@ -504,19 +544,19 @@ impl Triangle {
     // split triangle
     fn split(
         &mut self,
-        idx_self: usize,
-        idx_neighbor: usize,
-        idx_vert: usize,
-        idx_new_tri: usize,
-        idx_neighbor_new: Option<usize>,
+        idx_self: TriIdx,
+        idx_neighbor: SubIdx,
+        idx_vert: VertIdx,
+        idx_new_tri: TriIdx,
+        idx_neighbor_new: Option<TriIdx>,
     ) -> Triangle {
         let mut t = self.clone();
-        t.neighbors[idx_neighbor] = idx_neighbor_new;
-        t.neighbors[(idx_neighbor + 1) % 3] = Some(idx_self);
-        t.vertices[idx_neighbor] = idx_vert;
+        t.neighbors[idx_neighbor.0] = idx_neighbor_new;
+        t.neighbors[idx_neighbor.ccw().0] = Some(idx_self);
+        t.vertices[idx_neighbor.0] = idx_vert;
 
-        self.vertices[(idx_neighbor + 2) % 3] = idx_vert;
-        self.neighbors[(idx_neighbor + 2) % 3] = Some(idx_new_tri);
+        self.vertices[idx_neighbor.cw().0] = idx_vert;
+        self.neighbors[idx_neighbor.cw().0] = Some(idx_new_tri);
 
         t
     }
@@ -536,13 +576,13 @@ mod test {
         let net = TriangularNetwork::new(p0, p1, p2);
 
         let cases = vec![
-            (0.5, 0.0, Colinear(0, 1)),
-            (0.5, -0.1, Outside(0, 1)),
-            (1.0, 0.5, Colinear(0, 2)),
-            (1.1, 0.5, Outside(0, 2)),
-            (0.5, 0.5, Colinear(0, 0)),
-            (0.4, 0.6, Outside(0, 0)),
-            (0.5, 0.1, InTriangle(0)),
+            (0.5, 0.0, Colinear(TriIdx(0), SubIdx(1))),
+            (0.5, -0.1, Outside(TriIdx(0), SubIdx(1))),
+            (1.0, 0.5, Colinear(TriIdx(0), SubIdx(2))),
+            (1.1, 0.5, Outside(TriIdx(0), SubIdx(2))),
+            (0.5, 0.5, Colinear(TriIdx(0), SubIdx(0))),
+            (0.4, 0.6, Outside(TriIdx(0), SubIdx(0))),
+            (0.5, 0.1, InTriangle(TriIdx(0))),
         ];
 
         for (x, y, expected) in cases {
