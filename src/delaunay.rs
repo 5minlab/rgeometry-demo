@@ -178,14 +178,13 @@ impl TriangularNetwork {
         let mut out = Vec::new();
 
         let mut verts = Vec::new();
-        for (idx, (tri, sub)) in res.contour_ccw.iter().enumerate() {
+        for (idx, (tri, sub)) in res.contour_ccw.iter().rev().enumerate() {
             let t = self.tri(*tri);
             if idx == 0 {
-                verts.push(t.vert(*sub));
+                verts.push(t.vert(sub.cw()));
             }
-            verts.push(t.vert(sub.cw()));
+            verts.push(t.vert(*sub));
         }
-        verts.reverse();
         self.cut_restore_subdevide(&verts, &mut out);
 
         let mut verts = Vec::new();
