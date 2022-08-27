@@ -589,7 +589,7 @@ mod test {
         ];
 
         for (x, y, expected) in cases {
-            assert_eq!(net.locate_recursive(&Point::new([x, y])), expected);
+            assert_eq!(net.locate(TriIdx(0), &Point::new([x, y])), expected);
         }
     }
 }
