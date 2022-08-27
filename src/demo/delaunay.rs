@@ -139,26 +139,46 @@ impl Demo for DemoDelaunay {
     fn plot_ui(&self, plot_ui: &mut PlotUi) {
         let net = &self.net;
 
-        let v = net.cut(VertIdx(3), VertIdx(self.net.vertices.len() - 1));
+        let mut rng = thread_rng();
+
+        let v = loop {
+            let idx0 = VertIdx(rng.gen_range(3..self.net.vertices.len()));
+            let idx1 = VertIdx(rng.gen_range(3..self.net.vertices.len()));
+            if idx0 == idx1 {
+                continue;
+            }
+            let v = net.cut(idx0, idx1);
+            if v.cuts.len() < 2 {
+                continue;
+            }
+            break v;
+        };
 
         plot_net(net, plot_ui, self.opt_render_supertri);
 
-        for (from, to) in v.cuts {
-            let p_from = net.vert(from);
-            let p_to = net.vert(to);
+        for (from, to) in &v.cuts {
+            let p_from = net.vert(*from);
+            let p_to = net.vert(*to);
             plot_line(plot_ui, &[p_from, p_to], Color32::RED);
         }
 
-        for (t_idx, idx) in v.contour_ccw {
-            let p_from = net.tri_vert(t_idx, idx.cw());
-            let p_to = net.tri_vert(t_idx, idx);
+        for (t_idx, idx) in &v.contour_ccw {
+            let p_from = net.tri_vert(*t_idx, idx.cw());
+            let p_to = net.tri_vert(*t_idx, *idx);
             plot_line(plot_ui, &[p_from, p_to], Color32::BLUE);
         }
 
-        for (t_idx, idx) in v.contour_cw {
-            let p_from = net.tri_vert(t_idx, idx.cw());
-            let p_to = net.tri_vert(t_idx, idx);
+        for (t_idx, idx) in &v.contour_cw {
+            let p_from = net.tri_vert(*t_idx, idx.cw());
+            let p_to = net.tri_vert(*t_idx, *idx);
             plot_line(plot_ui, &[p_from, p_to], Color32::YELLOW);
+        }
+
+        let restore = net.cut_restore(&v);
+        for (v0, v1) in restore {
+            let p0 = net.vert(v0);
+            let p1 = net.vert(v1);
+            plot_line(plot_ui, &[p0, p1], Color32::WHITE);
         }
 
         plot_ui.points(plot::Points::new(PlotPoints::Owned(

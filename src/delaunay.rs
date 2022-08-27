@@ -148,6 +148,64 @@ impl TriangularNetwork {
         None
     }
 
+    pub fn cut_restore_subdevide(&self, slice: &[VertIdx], out: &mut Vec<(VertIdx, VertIdx)>) {
+        if slice.len() < 3 {
+            return;
+        }
+        let last = slice.len() - 1;
+
+        let p_start = self.vert(slice[0]);
+        let p_end = self.vert(slice[last]);
+
+        let mut curidx = 1;
+
+        for i in 2..last {
+            let cur = self.vert(slice[curidx]);
+            let next = self.vert(slice[i]);
+            if inside_circle(p_start, cur, p_end, next) {
+                curidx = i;
+            }
+        }
+
+        out.push((slice[0], slice[curidx]));
+        out.push((slice[curidx], slice[last]));
+
+        self.cut_restore_subdevide(&slice[0..curidx + 1], out);
+        self.cut_restore_subdevide(&slice[curidx..slice.len()], out);
+    }
+
+    pub fn cut_restore(&self, res: &CutResult) -> Vec<(VertIdx, VertIdx)> {
+        let mut out = Vec::new();
+
+        let mut verts = Vec::new();
+        for (idx, (tri, sub)) in res.contour_ccw.iter().enumerate() {
+            let t = self.tri(*tri);
+            if idx == 0 {
+                verts.push(t.vert(*sub));
+            }
+            verts.push(t.vert(sub.cw()));
+        }
+        verts.reverse();
+        self.cut_restore_subdevide(&verts, &mut out);
+
+        let mut verts = Vec::new();
+        for (idx, (tri, sub)) in res.contour_cw.iter().enumerate() {
+            let t = self.tri(*tri);
+            if idx == 0 {
+                verts.push(t.vert(sub.cw()));
+            }
+            verts.push(t.vert(*sub));
+        }
+        /*
+        for i in 0..verts.len() - 1 {
+            out.push((verts[i], verts[i + 1]));
+        }
+        */
+        self.cut_restore_subdevide(&verts, &mut out);
+
+        out
+    }
+
     pub fn cut(&self, v_from: VertIdx, v_to: VertIdx) -> CutResult {
         use Orientation::*;
 
