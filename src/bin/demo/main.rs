@@ -15,6 +15,9 @@ use stopwatch::Stopwatch;
 
 use rgeometry_playground::{boolean::*, delaunay::TriangularNetwork};
 
+mod delaunay;
+use delaunay::*;
+
 type P = Vector<f64, 2>;
 
 fn rotate(p: P, rot: f64) -> P {
@@ -32,7 +35,7 @@ fn p_rg_to_egui(p: &Polygon<f64>) -> plot::Polygon {
     plot::Polygon::new(points)
 }
 
-fn pt_egui(p: &Point<f64>) -> PlotPoint {
+pub fn pt_egui(p: &Point<f64>) -> PlotPoint {
     let [x, y] = p.array;
     PlotPoint::new(x, y)
 }
@@ -494,22 +497,6 @@ struct EguiRectOpts {
     render_delaunay_outer_tri: bool,
 }
 
-struct MyApp {
-    pause: bool,
-    t: f64,
-
-    count: usize,
-    view: f64,
-
-    opts: EguiRectOpts,
-
-    rects: Vec<Rect>,
-
-    reductions: usize,
-    dpoints: Vec<Point<f64>>,
-    d: TriangularNetwork,
-}
-
 fn gen_rects(view: f64, count: usize) -> Vec<Rect> {
     if true {
         vec![]
@@ -532,32 +519,18 @@ fn gen_rects(view: f64, count: usize) -> Vec<Rect> {
     }
 }
 
-fn gen_delaunay_points(view: f64) -> Vec<Point<f64>> {
-    let mut rng = thread_rng();
-    let mut v = Vec::new();
-    for _i in 0..20 {
-        let inner = view;
-        let x = rng.gen_range(-inner..inner);
-        let y = rng.gen_range(-inner..inner);
+struct MyApp {
+    pause: bool,
+    t: f64,
 
-        v.push(Point::new([x, y]));
-    }
-    v
-}
+    count: usize,
+    view: f64,
 
-fn gen_delaunay(view: f64, points: &[Point<f64>], mut reductions: usize) -> TriangularNetwork {
-    let v = view * 3.0;
-    let mut t = TriangularNetwork::new(
-        Point::new([-v, -v]),
-        Point::new([v, -v]),
-        Point::new([0.0, v]),
-    );
+    opts: EguiRectOpts,
 
-    for p in points {
-        t.insert(&p, &mut reductions);
-    }
+    rects: Vec<Rect>,
 
-    t
+    demo_delaunay: DemoDelaunay,
 }
 
 impl Default for MyApp {
@@ -572,10 +545,6 @@ impl Default for MyApp {
             ..EguiRectOpts::default()
         };
 
-        let dpoints = gen_delaunay_points(view);
-        let reductions = std::usize::MAX;
-        let d = gen_delaunay(view, &dpoints, reductions);
-
         Self {
             pause: false,
             t: 0.0,
@@ -587,9 +556,7 @@ impl Default for MyApp {
 
             rects,
 
-            reductions,
-            dpoints,
-            d,
+            demo_delaunay: DemoDelaunay::new(view),
         }
     }
 }
@@ -601,22 +568,6 @@ impl eframe::App for MyApp {
         }
         if ctx.input().key_pressed(Key::R) {
             self.t = 0.0;
-        }
-        if ctx.input().key_pressed(Key::D) {
-            self.dpoints = gen_delaunay_points(self.view);
-            self.reductions = std::usize::MAX;
-            self.d = gen_delaunay(self.view, &self.dpoints, self.reductions);
-        }
-        if ctx.input().key_pressed(Key::F) {
-            self.opts.render_delaunay_outer_tri = !self.opts.render_delaunay_outer_tri;
-        }
-        if ctx.input().key_pressed(Key::C) {
-            self.reductions += 1;
-            self.d = gen_delaunay(self.view, &self.dpoints, self.reductions);
-        }
-        if ctx.input().key_pressed(Key::X) {
-            self.reductions -= 1;
-            self.d = gen_delaunay(self.view, &self.dpoints, self.reductions);
         }
         if ctx.input().key_released(Key::G) {
             self.rects = gen_rects(self.view, self.count);
@@ -665,6 +616,8 @@ impl eframe::App for MyApp {
                 ));
             });
 
+            self.demo_delaunay.ui(ctx, ui);
+
             let plot = Plot::new(0)
                 .legend(Legend::default())
                 .data_aspect(1.0)
@@ -700,29 +653,7 @@ impl eframe::App for MyApp {
                 }
 
                 if true {
-                    for t in &self.d.triangles {
-                        let [v0, v1, v2] = t.vertices;
-                        let p0 = self.d.vertices[v0];
-                        let p1 = self.d.vertices[v1];
-                        let p2 = self.d.vertices[v2];
-                        if !self.opts.render_delaunay_outer_tri && (v0 < 3 || v1 < 3 || v2 < 3) {
-                            continue;
-                        }
-
-                        plot_ui.line(
-                            plot::Line::new(PlotPoints::Owned(vec![
-                                pt_egui(&p0),
-                                pt_egui(&p1),
-                                pt_egui(&p2),
-                                pt_egui(&p0),
-                            ]))
-                            .color(Color32::GREEN),
-                        );
-                    }
-
-                    plot_ui.points(plot::Points::new(PlotPoints::Owned(
-                        self.d.vertices.iter().skip(3).map(|v| pt_egui(v)).collect(),
-                    )));
+                    self.demo_delaunay.plot_ui(plot_ui);
                 }
 
                 for r in rects {
