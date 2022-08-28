@@ -254,6 +254,13 @@ impl TriangularNetwork {
         Some(idx_self)
     }
 
+    pub fn edge_duel(&self, edge: &Edge) -> Option<Edge> {
+        let t = self.tri(edge.tri);
+        let t_neighbor = t.neighbor(edge.sub)?;
+        let sub_neighbor = self.tri(t_neighbor).neighbor_idx(edge.tri).unwrap();
+        Some(Edge::new(t_neighbor, sub_neighbor))
+    }
+
     pub fn cut_restore(&mut self, res: &CutResult) -> Result<Vec<(VertIdx, VertIdx)>> {
         if res.cut_triangles.len() == 0 {
             return Ok(vec![]);
@@ -270,12 +277,9 @@ impl TriangularNetwork {
                     vert: t.vert(edge.sub.cw()),
                 });
             }
-            let n = t
-                .neighbor(edge.sub)
-                .map(|n| Edge::new(n, self.tri(n).neighbor_idx(edge.tri).unwrap()));
             verts_ccw.push(CutEdge {
                 inner: *edge,
-                outer: n,
+                outer: self.edge_duel(edge),
                 vert: t.vert(edge.sub),
             });
         }
@@ -290,12 +294,9 @@ impl TriangularNetwork {
                     vert: t.vert(edge.sub.cw()),
                 });
             }
-            let n = t
-                .neighbor(edge.sub)
-                .map(|n| Edge::new(n, self.tri(n).neighbor_idx(edge.tri).unwrap()));
             verts_cw.push(CutEdge {
                 inner: *edge,
-                outer: n,
+                outer: self.edge_duel(edge),
                 vert: t.vert(edge.sub),
             });
         }
@@ -334,7 +335,7 @@ impl TriangularNetwork {
         #[derive(Debug)]
         enum CutIter {
             FromVertex(TriIdx, SubIdx),
-            ToEdge(TriIdx, SubIdx),
+            ToEdge(Edge),
         }
 
         let mut cur = {
@@ -367,19 +368,13 @@ impl TriangularNetwork {
 
                     cuts.push((v1, v2));
 
-                    match t.neighbor(idx.cw()) {
-                        Some(neighbor) => {
-                            let t_neighbor = self.tri(neighbor);
-                            if let Some(idx_neighbor) = t_neighbor.neighbor_idx(t_idx) {
-                                cur = Some(CutIter::ToEdge(neighbor, idx_neighbor));
-                            } else {
-                                todo!();
-                            }
-                        }
-                        None => todo!(),
-                    }
+                    let next = self.edge_duel(&Edge::new(t_idx, idx.cw())).unwrap();
+                    cur = Some(CutIter::ToEdge(next));
                 }
-                CutIter::ToEdge(t_idx, idx) => {
+                CutIter::ToEdge(Edge {
+                    tri: t_idx,
+                    sub: idx,
+                }) => {
                     cut_triangles.push(t_idx);
 
                     let t = self.tri(t_idx);
@@ -419,13 +414,8 @@ impl TriangularNetwork {
 
                     cuts.push((v_t_from, v_t_to));
 
-                    if let Some(idx_neighbor) = t.neighbor(idx_n) {
-                        let t_neighbor = self.tri(idx_neighbor);
-                        let idx = t_neighbor.neighbor_idx(t_idx).unwrap();
-                        cur = Some(CutIter::ToEdge(idx_neighbor, idx));
-                    } else {
-                        todo!();
-                    }
+                    let next = self.edge_duel(&Edge::new(t_idx, idx_n)).unwrap();
+                    cur = Some(CutIter::ToEdge(next));
                 }
             }
         }
