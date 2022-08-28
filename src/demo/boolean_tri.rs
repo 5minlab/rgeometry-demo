@@ -103,10 +103,14 @@ impl Demo for DemoBooleanTri {
         "boolean_tri"
     }
 
-    fn ui(&mut self, t: f64, _ctx: &egui::Context, ui: &mut Ui) {
+    fn ui(&mut self, t: f64, ctx: &egui::Context, ui: &mut Ui) {
+        if ctx.input().key_pressed(egui::Key::G) {
+            self.rects = gen_rects(self.view, self.rects.len());
+        }
+
         ui.horizontal(|ui| {
-            if ui.button("regenerate").clicked() {
-                self.rects = gen_rects(self.view, 100);
+            if ui.button("(R) regenerate").clicked() {
+                self.rects = gen_rects(self.view, self.rects.len());
             }
             ui.separator();
             ui.checkbox(&mut self.opt_render_rect, "render rect");

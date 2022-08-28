@@ -1,4 +1,4 @@
-use crate::delaunay::{is_super, TriangularNetwork};
+use crate::delaunay::TriangularNetwork;
 use rand::{thread_rng, Rng};
 
 use eframe::{
@@ -39,7 +39,7 @@ fn plot_net(net: &TriangularNetwork, plot_ui: &mut PlotUi, render_supertri: bool
         let p0 = net.vert(v0);
         let p1 = net.vert(v1);
         let p2 = net.vert(v2);
-        if !render_supertri && (is_super(v0) || is_super(v1) || is_super(v2)) {
+        if !render_supertri && t.is_super() {
             continue;
         }
 

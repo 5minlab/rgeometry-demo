@@ -80,7 +80,7 @@ fn inside_circle(a: &Point<f64>, b: &Point<f64>, c: &Point<f64>, d: &Point<f64>)
     ]) > 0.0
 }
 
-pub fn is_super(idx: VertIdx) -> bool {
+fn is_super(idx: VertIdx) -> bool {
     idx.0 < 3
 }
 
@@ -190,15 +190,10 @@ impl TriangularNetwork {
                 vert: _,
             } = slice[1]
             {
-                if indices.contains(&outer.tri) {
-                    // dirty index, project
-                    if let Some(p) = idx_p {
-                        let proj = (inner, p);
-                        map.push(proj);
-                    } else {
-                        todo!();
-                    }
-                    return None;
+                // dirty index, project
+                if let Some(p) = idx_p {
+                    let proj = (inner, p);
+                    map.push(proj);
                 }
 
                 if let Some((_before, after)) = map.iter().find(|t| t.0 == outer) {
@@ -256,9 +251,15 @@ impl TriangularNetwork {
 
     pub fn edge_duel(&self, edge: &Edge) -> Option<Edge> {
         let t = self.tri(edge.tri);
-        let t_neighbor = t.neighbor(edge.sub)?;
-        let sub_neighbor = self.tri(t_neighbor).neighbor_idx(edge.tri).unwrap();
-        Some(Edge::new(t_neighbor, sub_neighbor))
+        let idx_neighbor = t.neighbor(edge.sub)?;
+        let t_neighbor = self.tri(idx_neighbor);
+        let sub_neighbor = match t_neighbor.neighbor_idx(edge.tri) {
+            Some(idx) => idx,
+            None => {
+                panic!("invariant: t1={:?}, t2={:?}", t, t_neighbor);
+            }
+        };
+        Some(Edge::new(idx_neighbor, sub_neighbor))
     }
 
     pub fn cut_restore(&mut self, res: &CutResult) -> Result<Vec<(VertIdx, VertIdx)>> {
@@ -821,6 +822,11 @@ pub struct Triangle {
 }
 
 impl Triangle {
+    pub fn is_super(&self) -> bool {
+        let [v0, v1, v2] = self.vertices;
+        is_super(v0) || is_super(v1) || is_super(v2)
+    }
+
     pub fn vert(&self, idx: SubIdx) -> VertIdx {
         self.vertices[idx.0]
     }
@@ -869,12 +875,12 @@ mod test {
         let net = TriangularNetwork::new(p0, p1, p2);
 
         let cases = vec![
-            (0.5, 0.0, Colinear(TriIdx(0), SubIdx(1))),
-            (0.5, -0.1, Outside(TriIdx(0), SubIdx(1))),
-            (1.0, 0.5, Colinear(TriIdx(0), SubIdx(2))),
-            (1.1, 0.5, Outside(TriIdx(0), SubIdx(2))),
-            (0.5, 0.5, Colinear(TriIdx(0), SubIdx(0))),
-            (0.4, 0.6, Outside(TriIdx(0), SubIdx(0))),
+            (0.5, 0.0, Colinear(Edge::new(TriIdx(0), SubIdx(1)))),
+            (0.5, -0.1, Outside(Edge::new(TriIdx(0), SubIdx(1)))),
+            (1.0, 0.5, Colinear(Edge::new(TriIdx(0), SubIdx(2)))),
+            (1.1, 0.5, Outside(Edge::new(TriIdx(0), SubIdx(2)))),
+            (0.5, 0.5, Colinear(Edge::new(TriIdx(0), SubIdx(0)))),
+            (0.4, 0.6, Outside(Edge::new(TriIdx(0), SubIdx(0)))),
             (0.5, 0.1, InTriangle(TriIdx(0))),
         ];
 
