@@ -1,13 +1,29 @@
 // https://www.personal.psu.edu/cxc11/AERSP560/DELAUNEY/13_Two_algorithms_Delauney.pdf
 use rgeometry::{data::*, Orientation};
 
-#[derive(PartialEq, Eq, PartialOrd, Ord, Debug, Clone, Copy)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub struct TriIdx(pub usize);
-#[derive(PartialEq, Eq, PartialOrd, Ord, Debug, Clone, Copy)]
-pub struct VertIdx(pub usize);
+impl std::fmt::Debug for TriIdx {
+    fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(fmt, "t{}", self.0)
+    }
+}
 
-#[derive(PartialEq, Eq, PartialOrd, Ord, Debug, Clone, Copy)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+pub struct VertIdx(pub usize);
+impl std::fmt::Debug for VertIdx {
+    fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(fmt, "v{}", self.0)
+    }
+}
+
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub struct SubIdx(pub usize);
+impl std::fmt::Debug for SubIdx {
+    fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(fmt, "s{}", self.0)
+    }
+}
 
 type Result<T> = anyhow::Result<T>;
 
@@ -150,23 +166,32 @@ impl TriangularNetwork {
         use Orientation::*;
 
         let p_end = self.vert(v_to);
+        let mut candidates = Vec::new();
 
         for (t_idx, t) in self.triangles.iter().enumerate() {
             let t_idx = TriIdx(t_idx);
             if let Some(idx) = t.vertex_idx(v_from) {
-                let p0 = self.tri_vert(t_idx, idx);
-                let p1 = self.tri_vert(t_idx, idx.ccw());
-                let p2 = self.tri_vert(t_idx, idx.cw());
-
-                let d0 = Point::orient_along_direction(p0, Direction::Through(p1), p_end);
-                let d1 = Point::orient_along_direction(p0, Direction::Through(p2), p_end);
-
-                match (d0, d1) {
-                    (CounterClockWise, ClockWise) => {
-                        return Some((t_idx, idx));
-                    }
-                    _ => (),
+                if t.vert(idx.ccw()) == v_to || t.vert(idx.cw()) == v_to {
+                    // already splitted
+                    return None;
                 }
+                candidates.push((t_idx, idx));
+            }
+        }
+
+        for (t_idx, idx) in candidates {
+            let p0 = self.tri_vert(t_idx, idx);
+            let p1 = self.tri_vert(t_idx, idx.ccw());
+            let p2 = self.tri_vert(t_idx, idx.cw());
+
+            let d0 = Point::orient_along_direction(p0, Direction::Through(p1), p_end);
+            let d1 = Point::orient_along_direction(p0, Direction::Through(p2), p_end);
+
+            match (d0, d1) {
+                (CounterClockWise, ClockWise) => {
+                    return Some((t_idx, idx));
+                }
+                _ => (),
             }
         }
         None
@@ -196,9 +221,7 @@ impl TriangularNetwork {
         proj: &mut Vec<(Edge, Edge)>,
         out: &mut Vec<(VertIdx, VertIdx)>,
     ) -> Option<TriIdx> {
-        if slice.len() < 2 {
-            return None;
-        }
+        assert!(slice.len() > 1);
         if slice.len() == 2 {
             if let CutEdge {
                 inner,
@@ -306,15 +329,17 @@ impl TriangularNetwork {
         let mut triangles = res.cut_triangles.clone();
         let mut proj = Vec::new();
 
-        let idx0 = self.cut_apply_subdivide(None, &verts_ccw, &mut triangles, &mut proj, &mut out);
-        let idx1 = self.cut_apply_subdivide(None, &verts_cw, &mut triangles, &mut proj, &mut out);
+        let idx0 = self
+            .cut_apply_subdivide(None, &verts_ccw, &mut triangles, &mut proj, &mut out)
+            .unwrap();
+        let idx1 = self
+            .cut_apply_subdivide(None, &verts_cw, &mut triangles, &mut proj, &mut out)
+            .unwrap();
 
-        if let Some(idx0) = idx0 {
-            self.tri_mut(idx0).neighbors[0] = idx1;
-        }
-        if let Some(idx1) = idx1 {
-            self.tri_mut(idx1).neighbors[0] = idx0;
-        }
+        assert!(triangles.is_empty());
+
+        self.tri_mut(idx0).neighbors[0] = Some(idx1);
+        self.tri_mut(idx1).neighbors[0] = Some(idx0);
         if let Err(e) = self.check_invariant("post-cut_resolve") {
             eprintln!("{:?}", res);
             return Err(e);
@@ -429,26 +454,23 @@ impl TriangularNetwork {
 
     fn check_invariant_tri_opt(&self, idx: Option<TriIdx>, msg: &str) -> Result<()> {
         if let Some(idx) = idx {
-            self.check_invariant_tri(idx, msg)?;
+            self.check_invariant_tri(idx, msg)
+        } else {
+            Ok(())
         }
-        Ok(())
     }
 
     fn check_invariant_tri(&self, idx: TriIdx, msg: &str) -> Result<()> {
         let t = self.tri(idx);
         for i in 0..3 {
             let i = SubIdx(i);
-            let e = Edge::new(idx, i);
-            if let Some(d) = self.edge_duel(&e) {
-                assert_eq!(Some(e), self.edge_duel(&d));
-            }
 
             if let Some(idx_neighbor) = t.neighbor(i) {
                 let n = self.tri(idx_neighbor);
                 let violated = if let Some(j) = n.neighbor_idx(idx) {
                     t.vert(i) != n.vert(j.cw()) || t.vert(i.cw()) != n.vert(j)
                 } else {
-                    false
+                    true
                 };
 
                 if violated {
@@ -461,6 +483,11 @@ impl TriangularNetwork {
                         n
                     );
                 }
+            }
+
+            let e = Edge::new(idx, i);
+            if let Some(d) = self.edge_duel(&e) {
+                assert_eq!(Some(e), self.edge_duel(&d));
             }
         }
         Ok(())
@@ -826,11 +853,8 @@ impl std::fmt::Debug for Triangle {
     fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(fmt, "Tri{{v=(")?;
         for (idx, v) in self.vertices.iter().enumerate() {
-            if idx == 0 {
-                write!(fmt, "{}", v.0)?;
-            } else {
-                write!(fmt, ", {}", v.0)?;
-            }
+            let prefix = if idx == 0 { "" } else { ", " };
+            write!(fmt, "{}{}", prefix, v.0)?;
         }
         write!(fmt, "), n=(")?;
         for (idx, n) in self.neighbors.iter().enumerate() {
