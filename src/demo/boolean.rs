@@ -23,6 +23,7 @@ fn rect_union(rects: &[Rect]) -> SimplicalChain {
 }
 
 impl DemoBoolean {
+    #[allow(unused)]
     pub fn new(view: f64) -> Self {
         let rects = gen_rects(view, 100);
         let sx = rect_union(&rects);

@@ -45,18 +45,9 @@ fn plot_net(net: &TriangularNetwork, plot_ui: &mut PlotUi, render_supertri: bool
 
         plot_line(plot_ui, &[p0, p1, p2, p0], Color32::GREEN);
 
-        if false {
+        if true {
             let center = pt_mean(&[p0, p1, p2]);
-            let mut label = format!("t={}\n(", _t_idx);
-            for i in 0..3 {
-                let n = t.neighbors[i];
-                let prefix = if i == 0 { "" } else { ", " };
-                match n {
-                    Some(n) => label += &format!("{}{}", prefix, n.0),
-                    None => label += &format!("{}_", prefix),
-                }
-            }
-            label += ")";
+            let label = format!("{:?}={:?}", _t_idx, t);
 
             plot_ui.text(plot::Text::new(pt_egui(&center), label));
         }
@@ -184,15 +175,15 @@ impl Default for MyApp {
 
         let demos: Vec<Box<dyn Demo>> = vec![
             Box::new(boolean_tri::DemoBooleanTri::new(view)),
-            Box::new(delaunay::DemoDelaunay::new(view)),
-            Box::new(cdt::DemoCDT::new(view)),
             Box::new(boolean::DemoBoolean::new(view)),
+            Box::new(cdt::DemoCDT::new(view)),
+            Box::new(delaunay::DemoDelaunay::new(view)),
             Box::new(gridnet::DemoGridNet::new(view)),
         ];
         let selected = demos[0].name();
 
         Self {
-            pause: false,
+            pause: true,
             t: 0.0,
 
             view,

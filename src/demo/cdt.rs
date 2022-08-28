@@ -9,15 +9,28 @@ use eframe::egui::{
 use rand::{thread_rng, Rng};
 use rgeometry::data::{Point, Vector};
 
-fn gen_delaunay_points(view: f64, len: usize) -> Vec<Point<f64>> {
-    let mut rng = thread_rng();
+fn gen_delaunay_points(view: f64, len: usize, square: bool) -> Vec<Point<f64>> {
     let mut v = Vec::new();
-    for _i in 0..len {
-        let inner = view;
-        let x = rng.gen_range(-inner..inner);
-        let y = rng.gen_range(-inner..inner);
+    if square {
+        let grid = 5;
+        for i in 0..grid {
+            for j in 0..grid {
+                // TODO: 2.0 crashes
+                let inner = view * 1.9;
+                let x = i as f64 / (grid - 1) as f64 * inner - inner / 2.0;
+                let y = j as f64 / (grid - 1) as f64 * inner - inner / 2.0;
+                v.push(Point::new([x, y]));
+            }
+        }
+    } else {
+        let mut rng = thread_rng();
+        for _i in 0..len {
+            let inner = view;
+            let x = rng.gen_range(-inner..inner);
+            let y = rng.gen_range(-inner..inner);
 
-        v.push(Point::new([x, y]));
+            v.push(Point::new([x, y]));
+        }
     }
     v
 }
@@ -27,7 +40,7 @@ fn gen_delaunay(
     points_constrained: &[Point<f64>],
     points: &[Point<f64>],
 ) -> TriangularNetwork {
-    let v = view * 3.0;
+    let v = view * 4.0;
     let mut t = TriangularNetwork::new(
         Point::new([-v, -v]),
         Point::new([v, -v]),
@@ -54,6 +67,7 @@ fn gen_delaunay(
 pub struct DemoCDT {
     view: f64,
     opt_render_supertri: bool,
+    opt_square: bool,
 
     points_constrained: Vec<Point<f64>>,
     points: Vec<Point<f64>>,
@@ -62,6 +76,7 @@ pub struct DemoCDT {
 }
 
 impl DemoCDT {
+    #[allow(unused)]
     pub fn new(view: f64) -> Self {
         let points_constrained = {
             let mut v = Vec::new();
@@ -74,15 +89,17 @@ impl DemoCDT {
             }
             v
         };
+        let opt_square = true;
         let points_count = 50;
 
-        let points = gen_delaunay_points(view, points_count);
+        let points = gen_delaunay_points(view, points_count, opt_square);
         let net = gen_delaunay(view, &points_constrained, &points);
 
         Self {
             view,
 
             opt_render_supertri: false,
+            opt_square,
             points_constrained,
             points,
 
@@ -98,7 +115,7 @@ impl DemoCDT {
             let p1 = VertIdx(3 + (i + 1) % len);
 
             let cut = net.cut(p0, p1);
-            if cut.cuts.is_empty() {
+            if cut.cut_triangles.is_empty() {
                 continue;
             }
             net.cut_apply(&cut).ok();
@@ -124,7 +141,12 @@ impl Demo for DemoCDT {
         }
 
         ui.horizontal(|ui| {
+            if ui.checkbox(&mut self.opt_square, "square").clicked() {
+                regen = true;
+            }
+            ui.separator();
             ui.checkbox(&mut self.opt_render_supertri, "render super");
+            ui.separator();
             if ui.button("regenerate").clicked() {
                 regen = true;
             }
@@ -136,7 +158,7 @@ impl Demo for DemoCDT {
         ui.label("shortcuts: (D) Regenerate | (F) Toggle supertriangles | (G) Constraint");
 
         if regen {
-            self.points = gen_delaunay_points(self.view, self.points.len());
+            self.points = gen_delaunay_points(self.view, self.points.len(), self.opt_square);
             self.net = gen_delaunay(self.view, &self.points_constrained, &self.points);
         }
     }

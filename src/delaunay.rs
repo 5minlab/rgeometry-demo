@@ -49,10 +49,8 @@ impl Edge {
 
 #[derive(Debug)]
 pub struct CutResult {
-    #[allow(unused)]
-    from: VertIdx,
-    #[allow(unused)]
-    to: VertIdx,
+    pub from: VertIdx,
+    pub to: VertIdx,
     pub cuts: Vec<(VertIdx, VertIdx)>,
     pub cut_triangles: Vec<TriIdx>,
     pub contour_cw: Vec<Edge>,
@@ -100,10 +98,22 @@ fn is_super(idx: VertIdx) -> bool {
     idx.0 < 3
 }
 
+#[derive(Debug)]
 struct CutEdge {
     inner: Edge,
     outer: Option<Edge>,
     vert: VertIdx,
+}
+
+#[derive(Debug)]
+enum CutIter {
+    FromVertex(TriIdx, SubIdx),
+    CoLinear {
+        tri: TriIdx,
+        src: SubIdx,
+        dst: SubIdx,
+    },
+    ToEdge(Edge),
 }
 
 #[derive(Debug)]
@@ -162,7 +172,23 @@ impl TriangularNetwork {
         self.vert(self.tri(tri_idx).vertices[idx.0])
     }
 
-    pub fn find_vert_dest(&self, v_from: VertIdx, v_to: VertIdx) -> Option<(TriIdx, SubIdx)> {
+    pub fn edge_duel(&self, edge: &Edge) -> Option<Edge> {
+        let t = self.tri(edge.tri);
+        let idx_neighbor = t.neighbor(edge.sub)?;
+        let t_neighbor = self.tri(idx_neighbor);
+        let sub_neighbor = match t_neighbor.neighbor_idx(edge.tri) {
+            Some(idx) => idx,
+            None => {
+                panic!(
+                    "invariant: t1={:?}={:?}, t2={:?}={:?}",
+                    edge.tri, t, idx_neighbor, t_neighbor
+                );
+            }
+        };
+        Some(Edge::new(idx_neighbor, sub_neighbor))
+    }
+
+    fn find_vert_dest(&self, v_from: VertIdx, v_to: VertIdx) -> Option<CutIter> {
         use Orientation::*;
 
         let p_end = self.vert(v_to);
@@ -185,11 +211,26 @@ impl TriangularNetwork {
             let p2 = self.tri_vert(t_idx, idx.cw());
 
             let d0 = Point::orient_along_direction(p0, Direction::Through(p1), p_end);
-            let d1 = Point::orient_along_direction(p0, Direction::Through(p2), p_end);
+            let d1 = Point::orient_along_direction(p1, Direction::Through(p2), p_end);
+            let d2 = Point::orient_along_direction(p2, Direction::Through(p0), p_end);
 
-            match (d0, d1) {
-                (CounterClockWise, ClockWise) => {
-                    return Some((t_idx, idx));
+            match (d0, d1, d2) {
+                (CounterClockWise, ClockWise, CounterClockWise) => {
+                    return Some(CutIter::FromVertex(t_idx, idx));
+                }
+                (CoLinear, ClockWise, CounterClockWise) => {
+                    return Some(CutIter::CoLinear {
+                        tri: t_idx,
+                        src: idx,
+                        dst: idx.ccw(),
+                    });
+                }
+                (CounterClockWise, ClockWise, CoLinear) => {
+                    return Some(CutIter::CoLinear {
+                        tri: t_idx,
+                        src: idx,
+                        dst: idx.cw(),
+                    });
                 }
                 _ => (),
             }
@@ -197,20 +238,110 @@ impl TriangularNetwork {
         None
     }
 
-    pub fn edge_duel(&self, edge: &Edge) -> Option<Edge> {
-        let t = self.tri(edge.tri);
-        let idx_neighbor = t.neighbor(edge.sub)?;
-        let t_neighbor = self.tri(idx_neighbor);
-        let sub_neighbor = match t_neighbor.neighbor_idx(edge.tri) {
-            Some(idx) => idx,
-            None => {
-                panic!(
-                    "invariant: t1={:?}={:?}, t2={:?}={:?}",
-                    edge.tri, t, idx_neighbor, t_neighbor
-                );
+    pub fn cut(&self, v_from: VertIdx, v_to: VertIdx) -> CutResult {
+        use Orientation::*;
+
+        let mut cuts = vec![];
+        let mut cut_triangles = vec![];
+        let mut contour_ccw = vec![];
+        let mut contour_cw = vec![];
+
+        let p_start = self.vert(v_from);
+        let p_end = self.vert(v_to);
+
+        let mut cur = self.find_vert_dest(v_from, v_to);
+        while let Some(iter) = cur.take() {
+            match iter {
+                // ray from vertex idx
+                CutIter::FromVertex(t_idx, idx) => {
+                    cut_triangles.push(t_idx);
+
+                    let t = self.tri(t_idx);
+
+                    let v0 = t.vert(idx);
+                    assert!(v0 != v_to);
+
+                    contour_ccw.push(Edge::new(t_idx, idx));
+                    contour_cw.push(Edge::new(t_idx, idx.ccw()));
+                    let v1 = t.vert(idx.ccw());
+                    let v2 = t.vert(idx.cw());
+
+                    cuts.push((v1, v2));
+
+                    let next = self.edge_duel(&Edge::new(t_idx, idx.cw())).unwrap();
+                    cur = Some(CutIter::ToEdge(next));
+                }
+
+                CutIter::ToEdge(Edge {
+                    tri: t_idx,
+                    sub: idx,
+                }) => {
+                    cut_triangles.push(t_idx);
+
+                    let t = self.tri(t_idx);
+
+                    let p0 = self.tri_vert(t_idx, idx);
+                    let p1 = self.tri_vert(t_idx, idx.ccw());
+                    let p2 = self.tri_vert(t_idx, idx.cw());
+
+                    // should not colinear
+                    let d0 = Point::orient_along_direction(p_start, Direction::Through(p_end), p0);
+                    let d1 = Point::orient_along_direction(p_start, Direction::Through(p_end), p1);
+                    // should not colineaer
+                    let d2 = Point::orient_along_direction(p_start, Direction::Through(p_end), p2);
+
+                    let idx_n = if d1 == CoLinear {
+                        contour_ccw.push(Edge::new(t_idx, idx.cw()));
+                        contour_cw.push(Edge::new(t_idx, idx.ccw()));
+
+                        cur = self.find_vert_dest(t.vert(idx.ccw()), v_to);
+                        continue;
+                    } else if d1.reverse() == d0 {
+                        contour_ccw.push(Edge::new(t_idx, idx.cw()));
+                        idx.ccw()
+                    } else if d1.reverse() == d2 {
+                        contour_cw.push(Edge::new(t_idx, idx.ccw()));
+                        idx.cw()
+                    } else {
+                        dbg!((d0, d1, d2));
+                        todo!();
+                    };
+
+                    let v_t_from = t.vert(idx_n.cw());
+                    let v_t_to = t.vert(idx_n);
+
+                    cuts.push((v_t_from, v_t_to));
+
+                    let next = self.edge_duel(&Edge::new(t_idx, idx_n)).unwrap();
+                    cur = Some(CutIter::ToEdge(next));
+                }
+
+                CutIter::CoLinear { tri, src, dst } => {
+                    let (edge_cw, edge_ccw) = if src.ccw() == dst {
+                        let edge_cw = Edge::new(tri, dst);
+                        let edge_ccw = self.edge_duel(&edge_cw).unwrap();
+                        (edge_cw, edge_ccw)
+                    } else {
+                        let edge_ccw = Edge::new(tri, src);
+                        let edge_cw = self.edge_duel(&edge_ccw).unwrap();
+                        (edge_cw, edge_ccw)
+                    };
+                    contour_cw.push(edge_cw);
+                    contour_ccw.push(edge_ccw);
+
+                    cur = self.find_vert_dest(self.tri(tri).vert(dst), v_to);
+                }
             }
-        };
-        Some(Edge::new(idx_neighbor, sub_neighbor))
+        }
+
+        CutResult {
+            from: v_from,
+            to: v_to,
+            cut_triangles,
+            cuts,
+            contour_cw,
+            contour_ccw,
+        }
     }
 
     fn cut_apply_subdivide(
@@ -245,211 +376,116 @@ impl TriangularNetwork {
 
         let last = slice.len() - 1;
 
-        let p_start = self.vert(slice[0].vert);
-        let p_end = self.vert(slice[last].vert);
+        let v_start = slice[0].vert;
+        let v_end = slice[last].vert;
 
-        let mut mid = 1;
+        let p_start = self.vert(v_start);
+        let p_end = self.vert(v_end);
 
+        let mut i_mid = 1;
         for i in 2..last {
-            let cur = self.vert(slice[mid].vert);
+            let cur = self.vert(slice[i_mid].vert);
             let next = self.vert(slice[i].vert);
+
             if inside_circle(p_start, cur, p_end, next) {
-                mid = i;
+                i_mid = i;
             }
         }
+        let v_mid = slice[i_mid].vert;
 
         let idx_self = indices.pop().unwrap();
 
         let idx_t0 = self.cut_apply_subdivide(
             Some(Edge::new(idx_self, SubIdx(1))),
-            &slice[..mid + 1],
+            &slice[..i_mid + 1],
             indices,
             proj,
             out,
         );
         let idx_t1 = self.cut_apply_subdivide(
             Some(Edge::new(idx_self, SubIdx(2))),
-            &slice[mid..],
+            &slice[i_mid..],
             indices,
             proj,
             out,
         );
 
         *self.tri_mut(idx_self) = Triangle {
-            vertices: [slice[0].vert, slice[mid].vert, slice[last].vert],
+            vertices: [v_start, v_mid, v_end],
             neighbors: [idx_p.map(|e| e.tri), idx_t0, idx_t1],
         };
 
-        out.push((slice[0].vert, slice[mid].vert));
-        out.push((slice[mid].vert, slice[last].vert));
+        out.push((v_start, v_mid));
+        out.push((v_mid, v_end));
 
         Some(idx_self)
+    }
+
+    fn cut_apply_prepare(&mut self, res: &CutResult) -> Vec<CutEdge> {
+        let first = res.contour_cw[0];
+        let mut verts = vec![CutEdge {
+            inner: first,
+            outer: None,
+            vert: self.tri(first.tri).vert(first.sub.cw()),
+        }];
+
+        for edge in res.contour_cw.iter() {
+            verts.push(CutEdge {
+                inner: *edge,
+                outer: self.edge_duel(edge),
+                vert: self.tri(edge.tri).vert(edge.sub),
+            });
+        }
+        for edge in res.contour_ccw.iter().rev() {
+            verts.push(CutEdge {
+                inner: *edge,
+                outer: self.edge_duel(edge),
+                vert: self.tri(edge.tri).vert(edge.sub),
+            });
+        }
+        verts
     }
 
     pub fn cut_apply(&mut self, res: &CutResult) -> Result<Vec<(VertIdx, VertIdx)>> {
         if res.cut_triangles.len() == 0 {
             return Ok(vec![]);
         }
-        let mut out = Vec::new();
 
-        let mut verts_ccw = Vec::new();
-        for (idx, edge) in res.contour_ccw.iter().rev().enumerate() {
-            let t = self.tri(edge.tri);
-            if idx == 0 {
-                verts_ccw.push(CutEdge {
-                    inner: *edge,
-                    outer: None,
-                    vert: t.vert(edge.sub.cw()),
-                });
-            }
-            verts_ccw.push(CutEdge {
-                inner: *edge,
-                outer: self.edge_duel(edge),
-                vert: t.vert(edge.sub),
-            });
-        }
-
-        let mut verts_cw = Vec::new();
-        for (idx, edge) in res.contour_cw.iter().enumerate() {
-            let t = self.tri(edge.tri);
-            if idx == 0 {
-                verts_cw.push(CutEdge {
-                    inner: *edge,
-                    outer: None,
-                    vert: t.vert(edge.sub.cw()),
-                });
-            }
-            verts_cw.push(CutEdge {
-                inner: *edge,
-                outer: self.edge_duel(edge),
-                vert: t.vert(edge.sub),
-            });
-        }
-
-        let mut triangles = res.cut_triangles.clone();
+        let mut indices = res.cut_triangles.clone();
         let mut proj = Vec::new();
 
-        let idx0 = self
-            .cut_apply_subdivide(None, &verts_ccw, &mut triangles, &mut proj, &mut out)
-            .unwrap();
-        let idx1 = self
-            .cut_apply_subdivide(None, &verts_cw, &mut triangles, &mut proj, &mut out)
-            .unwrap();
+        let mut out = Vec::new();
+        let verts = self.cut_apply_prepare(res);
+        let mut slice = verts.as_slice();
 
-        assert!(triangles.is_empty());
+        let p_start = self.vert(res.from).clone();
+        let p_end = self.vert(res.to).clone();
 
-        self.tri_mut(idx0).neighbors[0] = Some(idx1);
-        self.tri_mut(idx1).neighbors[0] = Some(idx0);
-        if let Err(e) = self.check_invariant("post-cut_resolve") {
-            eprintln!("{:?}", res);
-            return Err(e);
+        let mut out_triangles = Vec::new();
+        while slice.len() > 1 {
+            let split = slice.iter().skip(1).position(|e| {
+                Point::orient_along_direction(
+                    &p_start,
+                    Direction::Through(&p_end),
+                    self.vert(e.vert),
+                ) == Orientation::CoLinear
+            });
+            let i = match split {
+                Some(i) => i + 1,
+                None => slice.len() - 1,
+            };
+            let idx = self
+                .cut_apply_subdivide(None, &slice[..i + 1], &mut indices, &mut proj, &mut out)
+                .unwrap();
+            out_triangles.push(idx);
+            slice = &slice[i..];
         }
+        assert!(out_triangles.len() % 2 == 0);
+
+        assert!(indices.is_empty());
+        self.check_invariant("post-cut_resolve")?;
 
         Ok(out)
-    }
-
-    pub fn cut(&self, v_from: VertIdx, v_to: VertIdx) -> CutResult {
-        use Orientation::*;
-
-        let mut cuts = vec![(v_from, v_to)];
-        let mut cut_triangles = vec![];
-        let mut contour_cw = vec![];
-        let mut contour_ccw = vec![];
-
-        let p_start = self.vert(v_from);
-        let p_end = self.vert(v_to);
-
-        #[derive(Debug)]
-        enum CutIter {
-            FromVertex(TriIdx, SubIdx),
-            ToEdge(Edge),
-        }
-
-        let mut cur = {
-            match self.find_vert_dest(v_from, v_to) {
-                Some((t_idx, idx)) => Some(CutIter::FromVertex(t_idx, idx)),
-                _ => None,
-            }
-        };
-
-        while let Some(iter) = cur.take() {
-            match iter {
-                // ray from vertex idx
-                CutIter::FromVertex(t_idx, idx) => {
-                    cut_triangles.push(t_idx);
-
-                    let t = self.tri(t_idx);
-
-                    let v0 = t.vert(idx);
-                    assert!(v0 != v_to);
-
-                    contour_ccw.push(Edge::new(t_idx, idx));
-                    contour_cw.push(Edge::new(t_idx, idx.ccw()));
-                    let v1 = t.vert(idx.ccw());
-                    let v2 = t.vert(idx.cw());
-
-                    cuts.push((v1, v2));
-
-                    let next = self.edge_duel(&Edge::new(t_idx, idx.cw())).unwrap();
-                    cur = Some(CutIter::ToEdge(next));
-                }
-                CutIter::ToEdge(Edge {
-                    tri: t_idx,
-                    sub: idx,
-                }) => {
-                    cut_triangles.push(t_idx);
-
-                    let t = self.tri(t_idx);
-
-                    let v1 = t.vert(idx.ccw());
-
-                    let p0 = self.tri_vert(t_idx, idx);
-                    let p1 = self.tri_vert(t_idx, idx.ccw());
-                    let p2 = self.tri_vert(t_idx, idx.cw());
-
-                    // should not colinear
-                    let d0 = Point::orient_along_direction(p_start, Direction::Through(p_end), p0);
-                    let d1 = Point::orient_along_direction(p_start, Direction::Through(p_end), p1);
-                    // should not colineaer
-                    let d2 = Point::orient_along_direction(p_start, Direction::Through(p_end), p2);
-
-                    let idx_n = if d1 == CoLinear {
-                        contour_ccw.push(Edge::new(t_idx, idx.cw()));
-                        contour_cw.push(Edge::new(t_idx, idx.ccw()));
-                        cur = self
-                            .find_vert_dest(v1, v_to)
-                            .map(|(t_idx, idx)| CutIter::FromVertex(t_idx, idx));
-                        continue;
-                    } else if d1.reverse() == d0 {
-                        contour_ccw.push(Edge::new(t_idx, idx.cw()));
-                        idx.ccw()
-                    } else if d1.reverse() == d2 {
-                        contour_cw.push(Edge::new(t_idx, idx.ccw()));
-                        idx.cw()
-                    } else {
-                        dbg!((d0, d1, d2));
-                        todo!();
-                    };
-
-                    let v_t_from = t.vert(idx_n.cw());
-                    let v_t_to = t.vert(idx_n);
-
-                    cuts.push((v_t_from, v_t_to));
-
-                    let next = self.edge_duel(&Edge::new(t_idx, idx_n)).unwrap();
-                    cur = Some(CutIter::ToEdge(next));
-                }
-            }
-        }
-
-        CutResult {
-            from: v_from,
-            to: v_to,
-            cuts,
-            cut_triangles,
-            contour_cw,
-            contour_ccw,
-        }
     }
 
     fn check_invariant_tri_opt(&self, idx: Option<TriIdx>, msg: &str) -> Result<()> {

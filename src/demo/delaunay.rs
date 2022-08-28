@@ -9,10 +9,10 @@ use eframe::egui::{
 use rand::{thread_rng, Rng};
 use rgeometry::data::Point;
 
-fn gen_delaunay_points(view: f64) -> Vec<Point<f64>> {
+fn gen_delaunay_points(view: f64, square: bool) -> Vec<Point<f64>> {
     let mut v = Vec::new();
-    if false {
-        let grid = 5;
+    if square {
+        let grid = 3;
         for i in 0..grid {
             for j in 0..grid {
                 let inner = view * 2.0;
@@ -27,10 +27,15 @@ fn gen_delaunay_points(view: f64) -> Vec<Point<f64>> {
             let inner = view;
             let x = rng.gen_range(-inner..inner);
             let y = rng.gen_range(-inner..inner);
-
             v.push(Point::new([x, y]));
         }
     }
+
+    /*
+    use rand::seq::SliceRandom;
+    let mut rng = thread_rng();
+    v.shuffle(&mut rng);
+    */
     v
 }
 
@@ -56,7 +61,9 @@ fn gen_delaunay(view: f64, points: &[Point<f64>], reductions: usize) -> (Triangu
 
 pub struct DemoDelaunay {
     view: f64,
+
     opt_render_supertri: bool,
+    opt_test_degeneracy: bool,
 
     reductions: usize,
     reductions_max: usize,
@@ -67,13 +74,16 @@ pub struct DemoDelaunay {
 }
 
 impl DemoDelaunay {
+    #[allow(unused)]
     pub fn new(view: f64) -> Self {
-        let points = gen_delaunay_points(view);
+        let opt_test_degeneracy = true;
+        let points = gen_delaunay_points(view, opt_test_degeneracy);
         let (net, reductions) = gen_delaunay(view, &points, std::usize::MAX);
 
         Self {
             view,
             opt_render_supertri: false,
+            opt_test_degeneracy: true,
             reductions,
             reductions_max: reductions,
             points,
@@ -113,6 +123,13 @@ impl Demo for DemoDelaunay {
                 regen = true;
             }
             ui.separator();
+            if ui
+                .checkbox(&mut self.opt_test_degeneracy, "test square")
+                .clicked()
+            {
+                regen = true;
+            }
+            ui.separator();
             ui.add(
                 egui::Slider::new(&mut self.reductions, 0..=self.reductions_max).text("reductions"),
             );
@@ -126,7 +143,7 @@ impl Demo for DemoDelaunay {
         }
 
         if regen {
-            self.points = gen_delaunay_points(self.view);
+            self.points = gen_delaunay_points(self.view, self.opt_test_degeneracy);
             let (net, reductions) = gen_delaunay(self.view, &self.points, std::usize::MAX);
             self.net = net;
             self.cut = None;
@@ -147,13 +164,15 @@ impl Demo for DemoDelaunay {
                     continue;
                 }
                 let v = self.net.cut(idx0, idx1);
-                if v.cuts.len() < 2 {
+                if v.cut_triangles.len() < 2 {
                     continue;
                 }
                 break v;
             };
 
-            self.net.cut_apply(&cut).ok();
+            if let Err(e) = self.net.cut_apply(&cut) {
+                eprintln!("cut_apply: {:?}", e);
+            }
             self.cut = Some(cut);
         }
     }

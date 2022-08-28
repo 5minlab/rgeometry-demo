@@ -403,6 +403,7 @@ pub struct DemoGridNet {
 }
 
 impl DemoGridNet {
+    #[allow(unused)]
     pub fn new(view: f64) -> Self {
         let count = 100;
 
