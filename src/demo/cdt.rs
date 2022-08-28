@@ -1,4 +1,6 @@
-use super::{plot_line, plot_net, pt_egui, rotate, Demo};
+use super::{
+    plot_line, plot_net, points_circular, points_grid, points_uniform, pt_egui, rotate, Demo,
+};
 use crate::delaunay::*;
 use eframe::egui::{
     self,
@@ -6,33 +8,14 @@ use eframe::egui::{
     plot::{self, *},
     Key, Ui,
 };
-use rand::{thread_rng, Rng};
-use rgeometry::data::{Point, Vector};
+use rgeometry::data::Point;
 
 fn gen_delaunay_points(view: f64, len: usize, square: bool) -> Vec<Point<f64>> {
-    let mut v = Vec::new();
     if square {
-        let grid = 5;
-        for i in 0..grid {
-            for j in 0..grid {
-                // TODO: 2.0 crashes
-                let inner = view * 1.9;
-                let x = i as f64 / (grid - 1) as f64 * inner - inner / 2.0;
-                let y = j as f64 / (grid - 1) as f64 * inner - inner / 2.0;
-                v.push(Point::new([x, y]));
-            }
-        }
+        points_grid(view * 0.9, 5)
     } else {
-        let mut rng = thread_rng();
-        for _i in 0..len {
-            let inner = view;
-            let x = rng.gen_range(-inner..inner);
-            let y = rng.gen_range(-inner..inner);
-
-            v.push(Point::new([x, y]));
-        }
+        points_uniform(view, len)
     }
-    v
 }
 
 fn gen_delaunay(
@@ -78,17 +61,7 @@ pub struct DemoCDT {
 impl DemoCDT {
     #[allow(unused)]
     pub fn new(view: f64) -> Self {
-        let points_constrained = {
-            let mut v = Vec::new();
-            let radius = view;
-            let p = Vector([radius, 0.0]);
-            let len = 8;
-            for i in 0..len {
-                let theta = std::f64::consts::PI * 2.0 * i as f64 / len as f64;
-                v.push(Point::from(rotate(p.clone(), theta)));
-            }
-            v
-        };
+        let points_constrained = points_circular(view, 8);
         let opt_square = true;
         let points_count = 50;
 

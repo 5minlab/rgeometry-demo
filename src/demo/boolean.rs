@@ -1,10 +1,16 @@
-use super::{gen_rects, p_rg_to_egui, plot_line, Demo, Rect};
+use super::{gen_rects, p_rg_to_egui, plot_line, points_circular, Demo, Rect};
 use crate::boolean::*;
 use eframe::egui::{self, epaint::Color32, plot::*, Ui};
+use rgeometry::data::{Point, Polygon};
 
 pub struct DemoBoolean {
     opt_render_rect: bool,
     opt_render_union: bool,
+
+    opt_circle: bool,
+    opt_circle_intersect: bool,
+
+    circle: Vec<Point<f64>>,
 
     view: f64,
 
@@ -32,6 +38,10 @@ impl DemoBoolean {
             opt_render_rect: true,
             opt_render_union: true,
 
+            opt_circle: false,
+            opt_circle_intersect: false,
+            circle: points_circular(view / 2.0, 32),
+
             view,
 
             rects,
@@ -51,6 +61,10 @@ impl Demo for DemoBoolean {
                 self.rects = gen_rects(self.view, 100);
             }
             ui.separator();
+            ui.checkbox(&mut self.opt_circle, "circle?");
+            ui.separator();
+            ui.checkbox(&mut self.opt_circle_intersect, "circle intersect?");
+            ui.separator();
             ui.checkbox(&mut self.opt_render_rect, "render rect");
             ui.separator();
             ui.checkbox(&mut self.opt_render_union, "render union");
@@ -60,6 +74,17 @@ impl Demo for DemoBoolean {
             r.rot = t;
         }
         self.sx = rect_union(&self.rects);
+
+        if self.opt_circle {
+            let p = Polygon::new(self.circle.clone()).unwrap();
+            let sx_circle = SimplicalChain::from_polygon(&p);
+
+            if self.opt_circle_intersect {
+                self.sx = self.sx.bool_intersect(&sx_circle);
+            } else {
+                self.sx = self.sx.bool_union(&sx_circle);
+            }
+        }
     }
 
     fn plot_ui(&self, plot_ui: &mut PlotUi) {

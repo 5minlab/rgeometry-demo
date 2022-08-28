@@ -33,6 +33,43 @@ pub fn pt_mean(points: &[&Point<f64>]) -> Point<f64> {
     Point::new([x / l, y / l])
 }
 
+pub fn points_grid(extent: f64, grid_size: usize) -> Vec<Point<f64>> {
+    let mut v = Vec::with_capacity(grid_size * grid_size);
+    for i in 0..grid_size {
+        for j in 0..grid_size {
+            // TODO: 2.0 crashes
+            let inner = extent * 2.0;
+            let x = i as f64 / (grid_size - 1) as f64 * inner - inner / 2.0;
+            let y = j as f64 / (grid_size - 1) as f64 * inner - inner / 2.0;
+            v.push(Point::new([x, y]));
+        }
+    }
+    v
+}
+
+pub fn points_uniform(extent: f64, count: usize) -> Vec<Point<f64>> {
+    let mut v = Vec::with_capacity(count);
+    let mut rng = thread_rng();
+    for _i in 0..count {
+        let inner = extent;
+        let x = rng.gen_range(-inner..inner);
+        let y = rng.gen_range(-inner..inner);
+
+        v.push(Point::new([x, y]));
+    }
+    v
+}
+
+pub fn points_circular(radius: f64, count: usize) -> Vec<Point<f64>> {
+    let mut v = Vec::with_capacity(count);
+    let p = Vector([radius, 0.0]);
+    for i in 0..count {
+        let theta = std::f64::consts::PI * 2.0 * i as f64 / count as f64;
+        v.push(Point::from(rotate(p.clone(), theta)));
+    }
+    v
+}
+
 fn plot_net(net: &TriangularNetwork, plot_ui: &mut PlotUi, render_supertri: bool) {
     for (_t_idx, t) in net.triangles.iter().enumerate() {
         let [v0, v1, v2] = t.vertices;
