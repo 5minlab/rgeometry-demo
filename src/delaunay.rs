@@ -1,6 +1,8 @@
 // https://www.personal.psu.edu/cxc11/AERSP560/DELAUNEY/13_Two_algorithms_Delauney.pdf
 use rgeometry::{data::*, Orientation};
 
+use crate::boolean::SimplicalChain;
+
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub struct TriIdx(pub usize);
 impl std::fmt::Debug for TriIdx {
@@ -120,6 +122,17 @@ enum CutIter {
 pub struct TriangularNetwork {
     pub vertices: Vec<Point<f64>>,
     pub triangles: Vec<Triangle>,
+}
+
+fn pt_mean(points: &[&Point<f64>]) -> Point<f64> {
+    let mut x = 0.0;
+    let mut y = 0.0;
+    for p in points {
+        x += p.array[0];
+        y += p.array[1];
+    }
+    let l = points.len() as f64;
+    Point::new([x / l, y / l])
 }
 
 impl TriangularNetwork {
@@ -481,6 +494,14 @@ impl TriangularNetwork {
             slice = &slice[i..];
         }
         assert!(out_triangles.len() % 2 == 0);
+
+        for i in 0..(out_triangles.len() / 2) {
+            let t_ccw = out_triangles[i];
+            let t_cw = out_triangles[out_triangles.len() - 1 - i];
+
+            *self.tri_mut(t_ccw).neighbor_mut(SubIdx(0)) = Some(t_cw);
+            *self.tri_mut(t_cw).neighbor_mut(SubIdx(0)) = Some(t_ccw);
+        }
 
         assert!(indices.is_empty());
         self.check_invariant("post-cut_resolve")?;
@@ -858,22 +879,199 @@ impl TriangularNetwork {
         let mut start = TriIdx(0);
 
         loop {
+            use Orientation::*;
             use TriangularNetworkLocation::*;
 
             start = match self.locate(start, p) {
                 InTriangle(idx) => return InTriangle(idx),
                 Colinear(e) => return Colinear(e),
-                Outside(e) => match self.tri(e.tri).neighbor(e.sub) {
-                    Some(idx) => idx,
-                    None => {
-                        eprintln!("{:#?}, {:?}", self, p);
-                        todo!();
-                        // return Outside(idx, idx_neighbor);
+                Outside(e) => {
+                    match self.tri(e.tri).neighbor(e.sub) {
+                        Some(idx) => idx,
+                        None => {
+                            eprintln!("{:?}, {:?}", e, self.tri(e.tri));
+                            todo!();
+                            // return Outside(idx, idx_neighbor);
+                        }
                     }
-                },
+                }
             };
         }
     }
+
+    pub fn visibility(&self, sx: &SimplicalChain, p: &Point<f64>) -> Vec<(Point<f64>, Point<f64>)> {
+        use TriangularNetworkLocation::*;
+
+        if let Err(e) = self.check_invariant("visibility") {
+            eprintln!("{:?}", e);
+        }
+
+        match self.locate_recursive(p) {
+            InTriangle(idx) => {
+                let t = self.tri(idx);
+                let mut out = Vec::new();
+                for i in 0..3 {
+                    let sub = SubIdx(i);
+                    let edge = Edge::new(idx, sub);
+                    let cw = t.vert(sub.cw());
+                    let ccw = t.vert(sub);
+                    if let Some(duel) = self.edge_duel(&edge) {
+                        self.visibility_tri(
+                            sx,
+                            duel,
+                            VisibilityQuery {
+                                src: p.clone(),
+                                cw,
+                                ccw,
+                            },
+                            &mut out,
+                        );
+                    }
+                }
+
+                let mut segments = out
+                    .into_iter()
+                    .map(|s| {
+                        let t = self.tri(s.edge.tri);
+                        let p_start = self.vert(t.vert(s.edge.sub));
+                        let p_end = self.vert(t.vert(s.edge.sub.cw()));
+
+                        let l = Line::new_through(p_start, p_end);
+
+                        let l_ccw = Line::new_through(p, self.vert(s.ccw));
+                        let l_cw = Line::new_through(p, self.vert(s.cw));
+
+                        let p_ccw = l.intersection_point(&l_ccw).unwrap();
+                        let p_cw = l.intersection_point(&l_cw).unwrap();
+
+                        (p_cw, p_ccw)
+                    })
+                    .collect::<Vec<_>>();
+
+                segments.sort_by(|a, b| p.ccw_cmp_around(&a.0, &b.0));
+                segments
+            }
+            _ => todo!(),
+        }
+    }
+
+    pub fn centroid(&self, tri: TriIdx) -> Point<f64> {
+        let t = self.tri(tri);
+
+        let [v0, v1, v2] = t.vertices;
+        let p0 = self.vert(v0);
+        let p1 = self.vert(v1);
+        let p2 = self.vert(v2);
+
+        pt_mean(&[p0, p1, p2])
+    }
+
+    fn visibility_tri(
+        &self,
+        sx: &SimplicalChain,
+        e: Edge,
+        q: VisibilityQuery,
+        out: &mut Vec<VisibilitySegment>,
+    ) {
+        use Orientation::*;
+
+        let p = &q.src;
+        let p_cw = self.vert(q.cw);
+        let p_ccw = self.vert(q.ccw);
+
+        let t = self.tri(e.tri);
+        let center = self.centroid(e.tri);
+
+        if sx.characteristic(&center) != 1.0 {
+            out.push(VisibilitySegment {
+                edge: e,
+                ccw: q.ccw,
+                cw: q.cw,
+            });
+            return;
+        }
+
+        let v0 = t.vert(e.sub);
+        let v1 = t.vert(e.sub.ccw());
+        let v2 = t.vert(e.sub.cw());
+
+        let d_ccw_0 = Point::orient_along_direction(p, Direction::Through(p_ccw), self.vert(v0));
+        let d_ccw_1 = Point::orient_along_direction(p, Direction::Through(p_ccw), self.vert(v1));
+        let d_ccw_2 = Point::orient_along_direction(p, Direction::Through(p_ccw), self.vert(v2));
+
+        let d_cw_0 = Point::orient_along_direction(p, Direction::Through(p_cw), self.vert(v0));
+        let d_cw_1 = Point::orient_along_direction(p, Direction::Through(p_cw), self.vert(v1));
+        let d_cw_2 = Point::orient_along_direction(p, Direction::Through(p_cw), self.vert(v2));
+
+        // invariant
+        /*
+        assert_eq!(d_ccw_0, ClockWise);
+        assert_eq!(d_cw_2, CounterClockWise);
+        */
+
+        assert_ne!(d_cw_0, CounterClockWise);
+        assert_ne!(d_ccw_2, ClockWise);
+
+        // ccw side
+        if d_ccw_1 != CounterClockWise {
+            let ccw = q.ccw;
+            let cw = match d_cw_1 {
+                CoLinear => v1,
+                ClockWise => q.cw,
+                CounterClockWise => v1,
+            };
+
+            let e = Edge::new(e.tri, e.sub.cw());
+            if let Some(duel) = self.edge_duel(&e) {
+                self.visibility_tri(
+                    sx,
+                    duel,
+                    VisibilityQuery {
+                        src: q.src.clone(),
+                        ccw,
+                        cw,
+                    },
+                    out,
+                );
+            }
+        }
+
+        // cw side
+        if d_cw_1 != ClockWise {
+            let cw = q.cw;
+            let ccw = match d_ccw_1 {
+                CoLinear => v1,
+                CounterClockWise => q.ccw,
+                ClockWise => v1,
+            };
+
+            let e = Edge::new(e.tri, e.sub.ccw());
+            if let Some(duel) = self.edge_duel(&e) {
+                self.visibility_tri(
+                    sx,
+                    duel,
+                    VisibilityQuery {
+                        src: q.src.clone(),
+                        ccw,
+                        cw,
+                    },
+                    out,
+                );
+            }
+        }
+    }
+}
+
+struct VisibilitySegment {
+    edge: Edge,
+    ccw: VertIdx,
+    cw: VertIdx,
+}
+
+struct VisibilityQuery {
+    src: Point<f64>,
+    ccw: VertIdx,
+    cw: VertIdx,
 }
 
 #[derive(Clone)]

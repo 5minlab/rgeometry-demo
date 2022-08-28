@@ -1,4 +1,4 @@
-use crate::delaunay::TriangularNetwork;
+use crate::delaunay::{TriIdx, TriangularNetwork};
 use rand::{thread_rng, Rng};
 
 use eframe::{
@@ -20,17 +20,6 @@ mod gridnet;
 pub fn plot_line(plot_ui: &mut PlotUi, points: &[&Point<f64>], color: Color32) {
     let e_points = points.iter().map(|p| pt_egui(p)).collect();
     plot_ui.line(plot::Line::new(PlotPoints::Owned(e_points)).color(color));
-}
-
-pub fn pt_mean(points: &[&Point<f64>]) -> Point<f64> {
-    let mut x = 0.0;
-    let mut y = 0.0;
-    for p in points {
-        x += p.array[0];
-        y += p.array[1];
-    }
-    let l = points.len() as f64;
-    Point::new([x / l, y / l])
 }
 
 pub fn points_grid(extent: f64, grid_size: usize) -> Vec<Point<f64>> {
@@ -83,7 +72,7 @@ fn plot_net(net: &TriangularNetwork, plot_ui: &mut PlotUi, render_supertri: bool
         plot_line(plot_ui, &[p0, p1, p2, p0], Color32::GREEN);
 
         if true {
-            let center = pt_mean(&[p0, p1, p2]);
+            let center = net.centroid(TriIdx(_t_idx));
             let label = format!("{:?}={:?}", _t_idx, t);
 
             plot_ui.text(plot::Text::new(pt_egui(&center), label));
@@ -176,8 +165,11 @@ impl Rect {
 
 pub fn gen_rects(view: f64, count: usize) -> Vec<Rect> {
     let mut rng = thread_rng();
-    let mut rects = Vec::new();
-    for _ in 0..count {
+    let mut rects = Vec::with_capacity(count);
+
+    rects.push(Rect::new(view / 4.0, view / 4.0));
+
+    for _ in 1..count {
         let w = rng.gen_range(3.0..6.0);
         let h = rng.gen_range(0.1..3.0);
 
