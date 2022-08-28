@@ -153,7 +153,7 @@ impl Demo for DemoDelaunay {
                 break v;
             };
 
-            self.net.cut_restore(&cut).ok();
+            self.net.cut_apply(&cut).ok();
             self.cut = Some(cut);
         }
     }

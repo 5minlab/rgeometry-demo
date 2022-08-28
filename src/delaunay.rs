@@ -172,12 +172,28 @@ impl TriangularNetwork {
         None
     }
 
-    fn cut_restore_subdivide(
+    pub fn edge_duel(&self, edge: &Edge) -> Option<Edge> {
+        let t = self.tri(edge.tri);
+        let idx_neighbor = t.neighbor(edge.sub)?;
+        let t_neighbor = self.tri(idx_neighbor);
+        let sub_neighbor = match t_neighbor.neighbor_idx(edge.tri) {
+            Some(idx) => idx,
+            None => {
+                panic!(
+                    "invariant: t1={:?}={:?}, t2={:?}={:?}",
+                    edge.tri, t, idx_neighbor, t_neighbor
+                );
+            }
+        };
+        Some(Edge::new(idx_neighbor, sub_neighbor))
+    }
+
+    fn cut_apply_subdivide(
         &mut self,
         idx_p: Option<Edge>,
         slice: &[CutEdge],
         indices: &mut Vec<TriIdx>,
-        map: &mut Vec<(Edge, Edge)>,
+        proj: &mut Vec<(Edge, Edge)>,
         out: &mut Vec<(VertIdx, VertIdx)>,
     ) -> Option<TriIdx> {
         if slice.len() < 2 {
@@ -190,13 +206,11 @@ impl TriangularNetwork {
                 vert: _,
             } = slice[1]
             {
-                // dirty index, project
                 if let Some(p) = idx_p {
-                    let proj = (inner, p);
-                    map.push(proj);
+                    proj.push((inner, p));
                 }
 
-                if let Some((_before, after)) = map.iter().find(|t| t.0 == outer) {
+                if let Some((_before, after)) = proj.iter().find(|t| t.0 == outer) {
                     outer = *after;
                 }
 
@@ -223,18 +237,18 @@ impl TriangularNetwork {
 
         let idx_self = indices.pop().unwrap();
 
-        let idx_t0 = self.cut_restore_subdivide(
+        let idx_t0 = self.cut_apply_subdivide(
             Some(Edge::new(idx_self, SubIdx(1))),
             &slice[..mid + 1],
             indices,
-            map,
+            proj,
             out,
         );
-        let idx_t1 = self.cut_restore_subdivide(
+        let idx_t1 = self.cut_apply_subdivide(
             Some(Edge::new(idx_self, SubIdx(2))),
             &slice[mid..],
             indices,
-            map,
+            proj,
             out,
         );
 
@@ -249,20 +263,7 @@ impl TriangularNetwork {
         Some(idx_self)
     }
 
-    pub fn edge_duel(&self, edge: &Edge) -> Option<Edge> {
-        let t = self.tri(edge.tri);
-        let idx_neighbor = t.neighbor(edge.sub)?;
-        let t_neighbor = self.tri(idx_neighbor);
-        let sub_neighbor = match t_neighbor.neighbor_idx(edge.tri) {
-            Some(idx) => idx,
-            None => {
-                panic!("invariant: t1={:?}, t2={:?}", t, t_neighbor);
-            }
-        };
-        Some(Edge::new(idx_neighbor, sub_neighbor))
-    }
-
-    pub fn cut_restore(&mut self, res: &CutResult) -> Result<Vec<(VertIdx, VertIdx)>> {
+    pub fn cut_apply(&mut self, res: &CutResult) -> Result<Vec<(VertIdx, VertIdx)>> {
         if res.cut_triangles.len() == 0 {
             return Ok(vec![]);
         }
@@ -303,10 +304,10 @@ impl TriangularNetwork {
         }
 
         let mut triangles = res.cut_triangles.clone();
-        let mut map = Vec::new();
+        let mut proj = Vec::new();
 
-        let idx0 = self.cut_restore_subdivide(None, &verts_ccw, &mut triangles, &mut map, &mut out);
-        let idx1 = self.cut_restore_subdivide(None, &verts_cw, &mut triangles, &mut map, &mut out);
+        let idx0 = self.cut_apply_subdivide(None, &verts_ccw, &mut triangles, &mut proj, &mut out);
+        let idx1 = self.cut_apply_subdivide(None, &verts_cw, &mut triangles, &mut proj, &mut out);
 
         if let Some(idx0) = idx0 {
             self.tri_mut(idx0).neighbors[0] = idx1;
@@ -355,15 +356,10 @@ impl TriangularNetwork {
                     let t = self.tri(t_idx);
 
                     let v0 = t.vert(idx);
-                    if v0 == v_to {
-                        panic!("!!!");
-                    }
+                    assert!(v0 != v_to);
 
                     contour_ccw.push(Edge::new(t_idx, idx));
                     contour_cw.push(Edge::new(t_idx, idx.ccw()));
-                    if v0 == v_to {
-                        break;
-                    }
                     let v1 = t.vert(idx.ccw());
                     let v2 = t.vert(idx.cw());
 
@@ -442,6 +438,11 @@ impl TriangularNetwork {
         let t = self.tri(idx);
         for i in 0..3 {
             let i = SubIdx(i);
+            let e = Edge::new(idx, i);
+            if let Some(d) = self.edge_duel(&e) {
+                assert_eq!(Some(e), self.edge_duel(&d));
+            }
+
             if let Some(idx_neighbor) = t.neighbor(i) {
                 let n = self.tri(idx_neighbor);
                 let violated = if let Some(j) = n.neighbor_idx(idx) {
@@ -812,13 +813,35 @@ impl TriangularNetwork {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct Triangle {
     // counterclockwise
     pub vertices: [VertIdx; 3],
     //  - self, neighbors[0], neighbors[1] meets at vertices[0], counterclockwise
     //  - vertices[0], vertices[1] meets with neighbors[1], ...
     pub neighbors: [Option<TriIdx>; 3],
+}
+
+impl std::fmt::Debug for Triangle {
+    fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(fmt, "Tri{{v=(")?;
+        for (idx, v) in self.vertices.iter().enumerate() {
+            if idx == 0 {
+                write!(fmt, "{}", v.0)?;
+            } else {
+                write!(fmt, ", {}", v.0)?;
+            }
+        }
+        write!(fmt, "), n=(")?;
+        for (idx, n) in self.neighbors.iter().enumerate() {
+            let prefix = if idx == 0 { "" } else { ", " };
+            match n {
+                Some(idx) => write!(fmt, "{}{}", prefix, idx.0)?,
+                None => write!(fmt, "{}_", prefix)?,
+            }
+        }
+        write!(fmt, ")}}")
+    }
 }
 
 impl Triangle {

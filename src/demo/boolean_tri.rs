@@ -37,7 +37,7 @@ fn build_net(view: f64, sx: &SimplicalChain, cut: bool) -> TriangularNetwork {
             let idx1 = net.vertices.iter().position(|p| *p == s.dst).unwrap();
 
             let cut = net.cut(VertIdx(idx0), VertIdx(idx1));
-            if let Err(e) = net.cut_restore(&cut) {
+            if let Err(e) = net.cut_apply(&cut) {
                 eprintln!("failed to cut: cut={:?}, e={:?}", cut, e);
                 break;
             }

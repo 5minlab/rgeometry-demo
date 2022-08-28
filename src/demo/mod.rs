@@ -192,7 +192,7 @@ impl Default for MyApp {
         let selected = demos[0].name();
 
         Self {
-            pause: true,
+            pause: false,
             t: 0.0,
 
             view,
