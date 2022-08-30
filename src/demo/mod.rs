@@ -16,6 +16,7 @@ mod boolean_tri;
 mod cdt;
 mod delaunay;
 mod gridnet;
+mod rester;
 
 pub fn plot_line(plot_ui: &mut PlotUi, points: &[&Point<f64>], color: Color32) {
     let e_points = points.iter().map(|p| pt_egui(p)).collect();
@@ -208,6 +209,7 @@ impl Default for MyApp {
             Box::new(cdt::DemoCDT::new(view)),
             Box::new(delaunay::DemoDelaunay::new(view)),
             Box::new(gridnet::DemoGridNet::new(view)),
+            Box::new(rester::DemoRester::new(view)),
         ];
         let selected = demos[0].name();
 

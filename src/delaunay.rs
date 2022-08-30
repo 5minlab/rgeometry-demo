@@ -879,7 +879,6 @@ impl TriangularNetwork {
         let mut start = TriIdx(0);
 
         loop {
-            use Orientation::*;
             use TriangularNetworkLocation::*;
 
             start = match self.locate(start, p) {
@@ -995,13 +994,13 @@ impl TriangularNetwork {
         let v1 = t.vert(e.sub.ccw());
         let v2 = t.vert(e.sub.cw());
 
-        let d_ccw_0 = Point::orient_along_direction(p, Direction::Through(p_ccw), self.vert(v0));
+        // let d_ccw_0 = Point::orient_along_direction(p, Direction::Through(p_ccw), self.vert(v0));
         let d_ccw_1 = Point::orient_along_direction(p, Direction::Through(p_ccw), self.vert(v1));
         let d_ccw_2 = Point::orient_along_direction(p, Direction::Through(p_ccw), self.vert(v2));
 
         let d_cw_0 = Point::orient_along_direction(p, Direction::Through(p_cw), self.vert(v0));
         let d_cw_1 = Point::orient_along_direction(p, Direction::Through(p_cw), self.vert(v1));
-        let d_cw_2 = Point::orient_along_direction(p, Direction::Through(p_cw), self.vert(v2));
+        // let d_cw_2 = Point::orient_along_direction(p, Direction::Through(p_cw), self.vert(v2));
 
         // invariant
         /*
