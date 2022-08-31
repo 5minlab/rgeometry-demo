@@ -1,7 +1,6 @@
 use super::{gen_rects, p_rg_to_egui, plot_line, Demo, Rect};
 use crate::boolean::*;
-use crate::delaunay::VertIdx;
-use crate::demo::{TriIdx, TriangularNetwork};
+use crate::demo::{build_net, TriIdx, TriangularNetwork};
 use eframe::egui::{self, epaint::Color32, plot::*, Ui};
 use rgeometry::data::Point;
 
@@ -13,38 +12,6 @@ fn rect_union(rects: &[Rect]) -> SimplicalChain<f64> {
         sx = sx.bool_union(&sx_r);
     }
     sx
-}
-
-fn build_net(view: f64, sx: &SimplicalChain<f64>, cut: bool) -> TriangularNetwork<f64> {
-    let v = view * 4.0;
-    let mut net = TriangularNetwork::new(
-        Point::new([-v, -v]),
-        Point::new([v, -v]),
-        Point::new([0.0, v]),
-    );
-
-    let mut r = std::usize::MAX;
-    for s in &sx.simplices {
-        if let Err(e) = net.insert(&s.dst, &mut r) {
-            eprintln!("TriangularNetwork::insert: {:?}", e);
-            return net;
-        }
-    }
-
-    if cut {
-        for s in &sx.simplices {
-            let idx0 = net.vertices.iter().position(|p| *p == s.src).unwrap();
-            let idx1 = net.vertices.iter().position(|p| *p == s.dst).unwrap();
-
-            let cut = net.cut(VertIdx(idx0), VertIdx(idx1));
-            if let Err(e) = net.cut_apply(&cut) {
-                eprintln!("failed to cut: cut={:?}, e={:?}", cut, e);
-                break;
-            }
-        }
-    }
-
-    net
 }
 
 fn plot_net_inner(

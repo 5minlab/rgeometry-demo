@@ -1,3 +1,6 @@
+use crate::boolean::SimplicalChain;
+use crate::delaunay::VertIdx;
+
 use crate::delaunay::{TriIdx, TriangularNetwork};
 use rand::{thread_rng, Rng};
 use rgeometry::{data::Direction, Orientation};
@@ -162,7 +165,7 @@ pub struct Rect {
 }
 
 impl Rect {
-    fn new(extent_x: f64, extent_y: f64) -> Self {
+    pub fn new(extent_x: f64, extent_y: f64) -> Self {
         Self {
             pos: [0f64; 2],
             extent: [extent_x, extent_y],
@@ -204,7 +207,7 @@ impl Rect {
         Self { rot, ..self }
     }
 
-    fn polygon(&self) -> Polygon<f64> {
+    pub fn polygon(&self) -> Polygon<f64> {
         let center = Point::new(self.pos);
         let p0 = center + rotate(Vector([-self.extent[0], -self.extent[1]]), self.rot);
         let p1 = center + rotate(Vector([self.extent[0], -self.extent[1]]), self.rot);
@@ -232,6 +235,38 @@ pub fn gen_rects(view: f64, count: usize) -> Vec<Rect> {
         rects.push(Rect::new(w, h).pos(x, y));
     }
     rects
+}
+
+pub fn build_net(view: f64, sx: &SimplicalChain<f64>, cut: bool) -> TriangularNetwork<f64> {
+    let v = view * 4.0;
+    let mut net = TriangularNetwork::new(
+        Point::new([-v, -v]),
+        Point::new([v, -v]),
+        Point::new([0.0, v]),
+    );
+
+    let mut r = std::usize::MAX;
+    for s in &sx.simplices {
+        if let Err(e) = net.insert(&s.dst, &mut r) {
+            eprintln!("TriangularNetwork::insert: {:?}", e);
+            return net;
+        }
+    }
+
+    if cut {
+        for s in &sx.simplices {
+            let idx0 = net.vertices.iter().position(|p| *p == s.src).unwrap();
+            let idx1 = net.vertices.iter().position(|p| *p == s.dst).unwrap();
+
+            let cut = net.cut(VertIdx(idx0), VertIdx(idx1));
+            if let Err(e) = net.cut_apply(&cut) {
+                eprintln!("failed to cut: cut={:?}, e={:?}", cut, e);
+                break;
+            }
+        }
+    }
+
+    net
 }
 
 trait Demo {

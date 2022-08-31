@@ -1,7 +1,7 @@
 use criterion::{criterion_group, criterion_main, Criterion};
 use rgeometry::data::*;
 use rgeometry_playground::boolean::SimplicalChain;
-use rgeometry_playground::demo::points_cube_subdivide;
+use rgeometry_playground::demo::*;
 
 pub fn criterion_benchmark(c: &mut Criterion) {
     for subdivide in [1, 10, 100] {
@@ -17,6 +17,26 @@ pub fn criterion_benchmark(c: &mut Criterion) {
             &format!("SimplicalChain::bool_intersect {subdivide}"),
             |b| b.iter(|| s0.bool_intersect(&s1)),
         );
+    }
+
+    // complex visibility
+    {
+        let view = 30.0;
+        let mut rects = gen_rects(view, 100);
+        rects.push(Rect::new(view / 4.0, view / 4.0));
+
+        let mut sx = SimplicalChain::default();
+        for r in rects {
+            let p = r.polygon();
+            let sx_r = SimplicalChain::from_polygon(&p);
+            sx = sx.bool_union(&sx_r);
+        }
+
+        let net = build_net(view, &sx, true);
+
+        c.bench_function("TriangularNetwork::visibility", |b| {
+            b.iter(|| net.visibility(&sx, &Point::new([0.0, 0.0])))
+        });
     }
 }
 

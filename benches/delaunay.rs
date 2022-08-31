@@ -33,9 +33,6 @@ pub fn criterion_benchmark(c: &mut Criterion) {
     let mut rng = ChaCha20Rng::from_seed(seed);
 
     let p0 = rand_point(&mut rng);
-    let p1 = rand_point(&mut rng);
-    let p2 = rand_point(&mut rng);
-    let p3 = rand_point(&mut rng);
 
     let view = 100.0f64;
 
