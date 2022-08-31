@@ -1,4 +1,4 @@
-use super::{plot_line, plot_net, pt_egui, Demo};
+use super::{plot_line, plot_net, points_grid, points_uniform, pt_egui, Demo};
 use crate::delaunay::*;
 use eframe::egui::{
     self,
@@ -10,33 +10,11 @@ use rand::{thread_rng, Rng};
 use rgeometry::data::Point;
 
 fn gen_delaunay_points(view: f64, square: bool) -> Vec<Point<f64>> {
-    let mut v = Vec::new();
     if square {
-        let grid = 3;
-        for i in 0..grid {
-            for j in 0..grid {
-                let inner = view * 2.0;
-                let x = i as f64 / (grid - 1) as f64 * inner - inner / 2.0;
-                let y = j as f64 / (grid - 1) as f64 * inner - inner / 2.0;
-                v.push(Point::new([x, y]));
-            }
-        }
+        points_grid(view, 3)
     } else {
-        let mut rng = thread_rng();
-        for _i in 0..20 {
-            let inner = view;
-            let x = rng.gen_range(-inner..inner);
-            let y = rng.gen_range(-inner..inner);
-            v.push(Point::new([x, y]));
-        }
+        points_uniform(view, 20)
     }
-
-    /*
-    use rand::seq::SliceRandom;
-    let mut rng = thread_rng();
-    v.shuffle(&mut rng);
-    */
-    v
 }
 
 fn gen_delaunay(

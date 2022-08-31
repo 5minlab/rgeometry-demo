@@ -1,7 +1,7 @@
 pub mod boolean;
 pub mod delaunay;
 
-mod demo;
+pub mod demo;
 pub use demo::MyApp;
 
 #[cfg(target_arch = "wasm32")]

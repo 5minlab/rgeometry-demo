@@ -8,12 +8,17 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 anyhow = "1.0.62"
+criterion = "0.3.6"
 eframe = "0.19.0"
 rand = "0.8.5"
 rgeometry = { path = "../rgeometry" }
 
 [profile.release]
 debug = 1
+
+[[bench]]
+name = "benchmark"
+harness = false
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tracing-subscriber = "0.3"

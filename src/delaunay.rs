@@ -523,6 +523,13 @@ impl<T: PolygonScalar + Copy> TriangularNetwork<T> {
         Ok(out)
     }
 
+    #[allow(unused)]
+    #[cfg(not(debug_assertions))]
+    fn check_invariant_tri_opt(&self, _idx: Option<TriIdx>, msg: &str) -> Result<()> {
+        Ok(())
+    }
+
+    #[cfg(debug_assertions)]
     fn check_invariant_tri_opt(&self, idx: Option<TriIdx>, msg: &str) -> Result<()> {
         if let Some(idx) = idx {
             self.check_invariant_tri(idx, msg)
@@ -531,6 +538,13 @@ impl<T: PolygonScalar + Copy> TriangularNetwork<T> {
         }
     }
 
+    #[allow(unused)]
+    #[cfg(not(debug_assertions))]
+    fn check_invariant_tri(&self, _idx: TriIdx, _msg: &str) -> Result<()> {
+        Ok(())
+    }
+
+    #[cfg(debug_assertions)]
     fn check_invariant_tri(&self, idx: TriIdx, msg: &str) -> Result<()> {
         let t = self.tri(idx);
         for i in 0..3 {
@@ -564,6 +578,13 @@ impl<T: PolygonScalar + Copy> TriangularNetwork<T> {
         Ok(())
     }
 
+    #[allow(unused)]
+    #[cfg(not(debug_assertions))]
+    fn check_invariant(&self, msg: &str) -> Result<()> {
+        Ok(())
+    }
+
+    #[cfg(debug_assertions)]
     fn check_invariant(&self, msg: &str) -> Result<()> {
         for idx in 0..self.triangles.len() {
             self.check_invariant_tri(TriIdx(idx), msg)?;
