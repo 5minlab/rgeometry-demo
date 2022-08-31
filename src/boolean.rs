@@ -1,26 +1,15 @@
 // https://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.83.6811&rep=rep1&type=pdf
 
-use rgeometry::{data::*, Intersects, Orientation};
+use rgeometry::{data::*, Intersects, Orientation, PolygonScalar, TotalOrd};
 use std::cmp::Ordering;
 
-fn lerp_f64(v0: f64, v1: f64, t: f64) -> f64 {
-    v0 + (v1 - v0) * t
+#[derive(Default, Debug, PartialEq)]
+pub struct SimplicalChain<T: PolygonScalar> {
+    pub simplices: Vec<Simplex<T>>,
 }
 
-fn lerp_pf64(p0: &Point<f64>, p1: &Point<f64>, t: f64) -> Point<f64> {
-    Point::new([
-        lerp_f64(p0.array[0], p1.array[0], t),
-        lerp_f64(p0.array[1], p1.array[1], t),
-    ])
-}
-
-#[derive(Default, Debug, PartialEq, Eq)]
-pub struct SimplicalChain {
-    pub simplices: Vec<Simplex>,
-}
-
-impl SimplicalChain {
-    pub fn from_polygon(p: &Polygon<f64>) -> Self {
+impl<T: PolygonScalar + Copy + TotalOrd> SimplicalChain<T> {
+    pub fn from_polygon(p: &Polygon<T>) -> Self {
         let simplices = p
             .iter_boundary_edges()
             .map(|e| Simplex {
@@ -31,7 +20,7 @@ impl SimplicalChain {
         Self { simplices }
     }
 
-    pub fn characteristic(&self, q: &Point<f64>) -> f64 {
+    pub fn characteristic(&self, q: &Point<T>) -> f64 {
         for simplex in &self.simplices {
             if simplex.on_non_original_edge(q) {
                 // eprintln!("on-non-original-edge");
@@ -48,7 +37,7 @@ impl SimplicalChain {
         return sum;
     }
 
-    fn subdivide(&self, other: &SimplicalChain) -> SimplicalChain {
+    fn subdivide(&self, other: &SimplicalChain<T>) -> SimplicalChain<T> {
         let mut simplices = Vec::new();
 
         for s0 in &self.simplices {
@@ -104,8 +93,8 @@ impl SimplicalChain {
 
     fn subdivide_chracteristics(
         &self,
-        other: &SimplicalChain,
-    ) -> (SimplicalChain, Vec<f64>, SimplicalChain, Vec<f64>) {
+        other: &SimplicalChain<T>,
+    ) -> (SimplicalChain<T>, Vec<f64>, SimplicalChain<T>, Vec<f64>) {
         let sx0 = self;
         let sx1 = other;
 
@@ -159,7 +148,7 @@ impl SimplicalChain {
         return (sx0_subdivide, ec_sx0, sx1_subdivide, ec_sx1);
     }
 
-    pub fn bool_intersect(&self, other: &SimplicalChain) -> SimplicalChain {
+    pub fn bool_intersect(&self, other: &SimplicalChain<T>) -> SimplicalChain<T> {
         let sx0 = self;
         let sx1 = other;
 
@@ -183,7 +172,7 @@ impl SimplicalChain {
         SimplicalChain { simplices }
     }
 
-    pub fn bool_union(&self, other: &SimplicalChain) -> SimplicalChain {
+    pub fn bool_union(&self, other: &SimplicalChain<T>) -> SimplicalChain<T> {
         let sx0 = self;
         let sx1 = other;
 
@@ -208,35 +197,38 @@ impl SimplicalChain {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Simplex {
+pub struct Simplex<T: PolygonScalar> {
     // omit original point
-    pub src: Point<f64>,
-    pub dst: Point<f64>,
+    pub src: Point<T>,
+    pub dst: Point<T>,
 }
 
-impl Simplex {
+impl<T: PolygonScalar> Simplex<T> {
     fn reverse(&self) -> Self {
         Simplex {
-            src: self.dst,
-            dst: self.src,
+            src: self.dst.clone(),
+            dst: self.src.clone(),
         }
     }
-    fn midpoint(&self) -> Point<f64> {
-        lerp_pf64(&self.src, &self.dst, 0.5)
+    fn midpoint(&self) -> Point<T> {
+        let [x0, y0] = self.src.array.clone();
+        let [x1, y1] = self.dst.array.clone();
+        let x = (x0 + x1) / T::from_constant(2);
+        let y = (y0 + y1) / T::from_constant(2);
+        Point::new([x, y])
     }
 }
 
-const ORIGIN: Point<f64> = Point::new([0f64, 0f64]);
-
-impl Simplex {
+impl<T: PolygonScalar + Clone> Simplex<T> {
     // clockwise = -1
     // counterclockwise = 1
     // colinear = 0
     fn sign(&self) -> Orientation {
-        Point::orient_along_direction(&ORIGIN, Direction::Through(&self.src), &self.dst)
+        let origin = Point::new([T::from_constant(0), T::from_constant(0)]);
+        Point::orient_along_direction(&origin, Direction::Through(&self.src), &self.dst)
     }
 
-    fn on_non_original_edge(&self, q: &Point<f64>) -> bool {
+    fn on_non_original_edge(&self, q: &Point<T>) -> bool {
         use std::cmp::Ordering::*;
         use Orientation::*;
 
@@ -259,7 +251,9 @@ impl Simplex {
     }
 
     // assume that p is not on non-original edge of the simplex
-    fn beta(&self, q: &Point<f64>) -> f64 {
+    fn beta(&self, q: &Point<T>) -> f64 {
+        let origin = Point::new([T::from_constant(0), T::from_constant(0)]);
+
         use std::cmp::Ordering::*;
         use Orientation::*;
 
@@ -276,20 +270,20 @@ impl Simplex {
             CoLinear => 0.0,
         };
 
-        let dir0 = Point::orient_along_direction(&ORIGIN, Direction::Through(&self.src), q);
-        let dir1 = Point::orient_along_direction(&ORIGIN, Direction::Through(&self.dst), q);
+        let dir0 = Point::orient_along_direction(&origin, Direction::Through(&self.src), q);
+        let dir1 = Point::orient_along_direction(&origin, Direction::Through(&self.dst), q);
 
         match (dir0, dir1) {
             // Q is on some original edge
             (CoLinear, _) => {
-                if dir0 == CoLinear && ORIGIN.cmp_distance_to(q, &self.src) != Greater {
+                if dir0 == CoLinear && origin.cmp_distance_to(q, &self.src) != Greater {
                     signval / 2.0
                 } else {
                     0.0
                 }
             }
             (_, CoLinear) => {
-                if dir1 == CoLinear && ORIGIN.cmp_distance_to(q, &self.dst) != Greater {
+                if dir1 == CoLinear && origin.cmp_distance_to(q, &self.dst) != Greater {
                     signval / 2.0
                 } else {
                     0.0
@@ -319,6 +313,17 @@ impl Simplex {
 #[cfg(test)]
 mod test {
     use super::*;
+
+    fn lerp_f64(v0: f64, v1: f64, t: f64) -> f64 {
+        v0 + (v1 - v0) * t
+    }
+
+    fn lerp_pf64(p0: &Point<f64>, p1: &Point<f64>, t: f64) -> Point<f64> {
+        Point::new([
+            lerp_f64(p0.array[0], p1.array[0], t),
+            lerp_f64(p0.array[1], p1.array[1], t),
+        ])
+    }
 
     #[test]
     fn simplex_sign() {

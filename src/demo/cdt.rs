@@ -1,6 +1,4 @@
-use super::{
-    plot_line, plot_net, points_circular, points_grid, points_uniform, pt_egui, rotate, Demo,
-};
+use super::{plot_line, plot_net, points_circular, points_grid, points_uniform, pt_egui, Demo};
 use crate::delaunay::*;
 use eframe::egui::{
     self,
@@ -22,7 +20,7 @@ fn gen_delaunay(
     view: f64,
     points_constrained: &[Point<f64>],
     points: &[Point<f64>],
-) -> TriangularNetwork {
+) -> TriangularNetwork<f64> {
     let v = view * 4.0;
     let mut t = TriangularNetwork::new(
         Point::new([-v, -v]),
@@ -55,7 +53,7 @@ pub struct DemoCDT {
     points_constrained: Vec<Point<f64>>,
     points: Vec<Point<f64>>,
 
-    net: TriangularNetwork,
+    net: TriangularNetwork<f64>,
 }
 
 impl DemoCDT {

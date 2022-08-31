@@ -1,5 +1,5 @@
 // https://www.personal.psu.edu/cxc11/AERSP560/DELAUNEY/13_Two_algorithms_Delauney.pdf
-use rgeometry::{data::*, Orientation};
+use rgeometry::{data::*, Orientation, PolygonScalar};
 
 use crate::boolean::SimplicalChain;
 
@@ -67,23 +67,32 @@ enum TriangularNetworkLocation {
     Outside(Edge),
 }
 
-fn det2(v: [f64; 4]) -> f64 {
+fn det2<T>(v: [T; 4]) -> T
+where
+    T: PolygonScalar,
+{
     let [a, b, c, d] = v;
     a * d - b * c
 }
 
-fn det3(v: [f64; 9]) -> f64 {
+fn det3<T>(v: [T; 9]) -> T
+where
+    T: PolygonScalar + Copy,
+{
     let [a, b, c, d, e, f, g, h, i] = v;
     a * det2([e, f, h, i]) - b * det2([d, f, g, i]) + c * det2([d, e, g, h])
 }
 
-fn inside_circle(a: &Point<f64>, b: &Point<f64>, c: &Point<f64>, d: &Point<f64>) -> bool {
+fn inside_circle<T>(a: &Point<T>, b: &Point<T>, c: &Point<T>, d: &Point<T>) -> bool
+where
+    T: PolygonScalar + Copy,
+{
     let [ax, ay] = a.array;
     let [bx, by] = b.array;
     let [cx, cy] = c.array;
     let [dx, dy] = d.array;
 
-    det3([
+    let d = det3([
         ax - dx,
         ay - dy,
         ax * ax - dx * dx + ay * ay - dy * dy,
@@ -93,7 +102,8 @@ fn inside_circle(a: &Point<f64>, b: &Point<f64>, c: &Point<f64>, d: &Point<f64>)
         cx - dx,
         cy - dy,
         cx * cx - dx * dx + cy * cy - dy * dy,
-    ]) > 0.0
+    ]);
+    d > T::from_constant(0)
 }
 
 fn is_super(idx: VertIdx) -> bool {
@@ -118,25 +128,29 @@ enum CutIter {
     ToEdge(Edge),
 }
 
-#[derive(Debug)]
-pub struct TriangularNetwork {
-    pub vertices: Vec<Point<f64>>,
-    pub triangles: Vec<Triangle>,
-}
-
-fn pt_mean(points: &[&Point<f64>]) -> Point<f64> {
-    let mut x = 0.0;
-    let mut y = 0.0;
+fn pt_mean<T>(points: &[&Point<T>]) -> Point<T>
+where
+    T: PolygonScalar + Copy,
+{
+    let mut x = T::from_constant(0);
+    let mut y = T::from_constant(0);
     for p in points {
         x += p.array[0];
         y += p.array[1];
     }
-    let l = points.len() as f64;
+    // TODO
+    let l = T::from_constant(points.len() as i8);
     Point::new([x / l, y / l])
 }
 
-impl TriangularNetwork {
-    pub fn new(p0: Point<f64>, p1: Point<f64>, p2: Point<f64>) -> Self {
+#[derive(Debug)]
+pub struct TriangularNetwork<T> {
+    pub vertices: Vec<Point<T>>,
+    pub triangles: Vec<Triangle>,
+}
+
+impl<T: PolygonScalar + Copy> TriangularNetwork<T> {
+    pub fn new(p0: Point<T>, p1: Point<T>, p2: Point<T>) -> Self {
         let (p1, p2) = match Point::orient_along_direction(&p0, Direction::Through(&p1), &p2) {
             Orientation::CounterClockWise => (p1, p2),
             Orientation::CoLinear => todo!(),
@@ -171,17 +185,17 @@ impl TriangularNetwork {
         TriIdx(idx)
     }
 
-    pub fn vert(&self, idx: VertIdx) -> &Point<f64> {
+    pub fn vert(&self, idx: VertIdx) -> &Point<T> {
         &self.vertices[idx.0]
     }
 
-    fn add_vert(&mut self, p: Point<f64>) -> VertIdx {
+    fn add_vert(&mut self, p: Point<T>) -> VertIdx {
         let idx = self.vertices.len();
         self.vertices.push(p);
         VertIdx(idx)
     }
 
-    pub fn tri_vert(&self, tri_idx: TriIdx, idx: SubIdx) -> &Point<f64> {
+    pub fn tri_vert(&self, tri_idx: TriIdx, idx: SubIdx) -> &Point<T> {
         self.vert(self.tri(tri_idx).vertices[idx.0])
     }
 
@@ -692,7 +706,7 @@ impl TriangularNetwork {
         Ok(true)
     }
 
-    pub fn insert(&mut self, p: &Point<f64>, reductions: &mut usize) -> Result<()> {
+    pub fn insert(&mut self, p: &Point<T>, reductions: &mut usize) -> Result<()> {
         use TriangularNetworkLocation::*;
 
         if *reductions == 0 {
@@ -846,7 +860,7 @@ impl TriangularNetwork {
         self.check_invariant("post-insert")
     }
 
-    fn locate(&self, start: TriIdx, p: &Point<f64>) -> TriangularNetworkLocation {
+    fn locate(&self, start: TriIdx, p: &Point<T>) -> TriangularNetworkLocation {
         use Orientation::*;
         use TriangularNetworkLocation::*;
 
@@ -871,11 +885,11 @@ impl TriangularNetwork {
             (CoLinear, CounterClockWise, CounterClockWise) => Colinear(Edge::new(start, SubIdx(1))),
             (CounterClockWise, CoLinear, CounterClockWise) => Colinear(Edge::new(start, SubIdx(2))),
             (CounterClockWise, CounterClockWise, CoLinear) => Colinear(Edge::new(start, SubIdx(0))),
-            _ => todo!(),
+            _ => panic!("{:?}", (d0, d1, d2)),
         }
     }
 
-    fn locate_recursive(&self, p: &Point<f64>) -> TriangularNetworkLocation {
+    fn locate_recursive(&self, p: &Point<T>) -> TriangularNetworkLocation {
         let mut start = TriIdx(0);
 
         loop {
@@ -898,7 +912,7 @@ impl TriangularNetwork {
         }
     }
 
-    pub fn visibility(&self, sx: &SimplicalChain, p: &Point<f64>) -> Vec<(Point<f64>, Point<f64>)> {
+    pub fn visibility(&self, sx: &SimplicalChain<T>, p: &Point<T>) -> Vec<(Point<T>, Point<T>)> {
         use TriangularNetworkLocation::*;
 
         if let Err(e) = self.check_invariant("visibility") {
@@ -954,7 +968,7 @@ impl TriangularNetwork {
         }
     }
 
-    pub fn centroid(&self, tri: TriIdx) -> Point<f64> {
+    pub fn centroid(&self, tri: TriIdx) -> Point<T> {
         let t = self.tri(tri);
 
         let [v0, v1, v2] = t.vertices;
@@ -967,9 +981,9 @@ impl TriangularNetwork {
 
     fn visibility_tri(
         &self,
-        sx: &SimplicalChain,
+        sx: &SimplicalChain<T>,
         e: Edge,
-        q: VisibilityQuery,
+        q: VisibilityQuery<T>,
         out: &mut Vec<VisibilitySegment>,
     ) {
         use Orientation::*;
@@ -1067,8 +1081,8 @@ struct VisibilitySegment {
     cw: VertIdx,
 }
 
-struct VisibilityQuery {
-    src: Point<f64>,
+struct VisibilityQuery<T> {
+    src: Point<T>,
     ccw: VertIdx,
     cw: VertIdx,
 }

@@ -15,10 +15,10 @@ pub struct DemoBoolean {
     view: f64,
 
     rects: Vec<Rect>,
-    sx: SimplicalChain,
+    sx: SimplicalChain<f64>,
 }
 
-fn rect_union(rects: &[Rect]) -> SimplicalChain {
+fn rect_union(rects: &[Rect]) -> SimplicalChain<f64> {
     let mut sx = SimplicalChain::default();
     for r in rects {
         let p = r.polygon();

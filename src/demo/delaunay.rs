@@ -39,7 +39,11 @@ fn gen_delaunay_points(view: f64, square: bool) -> Vec<Point<f64>> {
     v
 }
 
-fn gen_delaunay(view: f64, points: &[Point<f64>], reductions: usize) -> (TriangularNetwork, usize) {
+fn gen_delaunay(
+    view: f64,
+    points: &[Point<f64>],
+    reductions: usize,
+) -> (TriangularNetwork<f64>, usize) {
     let v = view * 4.0;
     let mut t = TriangularNetwork::new(
         Point::new([-v, -v]),
@@ -69,7 +73,7 @@ pub struct DemoDelaunay {
     reductions_max: usize,
     points: Vec<Point<f64>>,
 
-    net: TriangularNetwork,
+    net: TriangularNetwork<f64>,
     cut: Option<CutResult>,
 }
 

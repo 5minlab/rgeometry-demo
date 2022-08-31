@@ -5,7 +5,7 @@ use crate::demo::{TriIdx, TriangularNetwork};
 use eframe::egui::{self, epaint::Color32, plot::*, Ui};
 use rgeometry::data::Point;
 
-fn rect_union(rects: &[Rect]) -> SimplicalChain {
+fn rect_union(rects: &[Rect]) -> SimplicalChain<f64> {
     let mut sx = SimplicalChain::default();
     for r in rects {
         let p = r.polygon();
@@ -15,7 +15,7 @@ fn rect_union(rects: &[Rect]) -> SimplicalChain {
     sx
 }
 
-fn build_net(view: f64, sx: &SimplicalChain, cut: bool) -> TriangularNetwork {
+fn build_net(view: f64, sx: &SimplicalChain<f64>, cut: bool) -> TriangularNetwork<f64> {
     let v = view * 4.0;
     let mut net = TriangularNetwork::new(
         Point::new([-v, -v]),
@@ -47,7 +47,12 @@ fn build_net(view: f64, sx: &SimplicalChain, cut: bool) -> TriangularNetwork {
     net
 }
 
-fn plot_net_inner(sx: &SimplicalChain, net: &TriangularNetwork, plot_ui: &mut PlotUi, prune: bool) {
+fn plot_net_inner(
+    sx: &SimplicalChain<f64>,
+    net: &TriangularNetwork<f64>,
+    plot_ui: &mut PlotUi,
+    prune: bool,
+) {
     for (_t_idx, t) in net.triangles.iter().enumerate() {
         let [v0, v1, v2] = t.vertices;
         let p0 = net.vert(v0);
@@ -74,8 +79,8 @@ pub struct DemoBooleanTri {
     view: f64,
 
     rects: Vec<Rect>,
-    sx: SimplicalChain,
-    net: TriangularNetwork,
+    sx: SimplicalChain<f64>,
+    net: TriangularNetwork<f64>,
     vis: Vec<(Point<f64>, Point<f64>)>,
 }
 

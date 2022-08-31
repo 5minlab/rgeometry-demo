@@ -60,7 +60,7 @@ pub fn points_circular(radius: f64, count: usize) -> Vec<Point<f64>> {
     v
 }
 
-fn plot_net(net: &TriangularNetwork, plot_ui: &mut PlotUi, render_supertri: bool) {
+fn plot_net(net: &TriangularNetwork<f64>, plot_ui: &mut PlotUi, render_supertri: bool) {
     for (_t_idx, t) in net.triangles.iter().enumerate() {
         let [v0, v1, v2] = t.vertices;
         let p0 = net.vert(v0);
@@ -214,7 +214,7 @@ impl Default for MyApp {
         let selected = demos[0].name();
 
         Self {
-            pause: true,
+            pause: false,
             t: 0.0,
 
             view,
