@@ -1,5 +1,6 @@
 pub mod boolean;
 pub mod delaunay;
+pub mod rester;
 
 pub mod demo;
 pub use demo::MyApp;

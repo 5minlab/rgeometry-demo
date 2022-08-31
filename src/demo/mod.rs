@@ -50,7 +50,7 @@ pub fn points_uniform<R: Rng>(rng: &mut R, extent: f64, count: usize) -> Vec<Poi
     v
 }
 
-fn points_tri<R: Rng>(rng: &mut R, view: f64) -> [Point<f64>; 3] {
+pub fn points_tri<R: Rng>(rng: &mut R, view: f64) -> [Point<f64>; 3] {
     let verts = points_uniform(rng, view, 3);
 
     let p0 = verts[0];
