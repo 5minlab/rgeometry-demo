@@ -1,5 +1,6 @@
 use crate::delaunay::{TriIdx, TriangularNetwork};
 use rand::{thread_rng, Rng};
+use rgeometry::{data::Direction, Orientation};
 
 use eframe::{
     egui::{
@@ -37,9 +38,8 @@ pub fn points_grid(extent: f64, grid_size: usize) -> Vec<Point<f64>> {
     v
 }
 
-pub fn points_uniform(extent: f64, count: usize) -> Vec<Point<f64>> {
+pub fn points_uniform<R: Rng>(rng: &mut R, extent: f64, count: usize) -> Vec<Point<f64>> {
     let mut v = Vec::with_capacity(count);
-    let mut rng = thread_rng();
     for _i in 0..count {
         let inner = extent;
         let x = rng.gen_range(-inner..inner);
@@ -50,6 +50,19 @@ pub fn points_uniform(extent: f64, count: usize) -> Vec<Point<f64>> {
     v
 }
 
+fn points_tri<R: Rng>(rng: &mut R, view: f64) -> [Point<f64>; 3] {
+    let verts = points_uniform(rng, view, 3);
+
+    let p0 = verts[0];
+    let p1 = verts[1];
+    let p2 = verts[2];
+
+    match Point::orient_along_direction(&p0, Direction::Through(&p1), &p2) {
+        Orientation::CounterClockWise => [p0, p2, p1],
+        _ => [p0, p1, p2],
+    }
+}
+
 pub fn points_circular(radius: f64, count: usize) -> Vec<Point<f64>> {
     let mut v = Vec::with_capacity(count);
     let p = Vector([radius, 0.0]);
@@ -58,6 +71,44 @@ pub fn points_circular(radius: f64, count: usize) -> Vec<Point<f64>> {
         v.push(Point::from(rotate(p.clone(), theta)));
     }
     v
+}
+
+fn lerp_f64(v0: f64, v1: f64, t: f64) -> f64 {
+    v0 + (v1 - v0) * t
+}
+
+fn lerp_pf64(p0: &Point<f64>, p1: &Point<f64>, t: f64) -> Point<f64> {
+    Point::new([
+        lerp_f64(p0.array[0], p1.array[0], t),
+        lerp_f64(p0.array[1], p1.array[1], t),
+    ])
+}
+
+fn points_along(src: &Point<f64>, dst: &Point<f64>, subdivide: usize, out: &mut Vec<Point<f64>>) {
+    for i in 0..subdivide {
+        let t = ((i + 1) as f64) / (subdivide as f64);
+        out.push(lerp_pf64(src, dst, t));
+    }
+}
+
+pub fn points_cube_subdivide(pos: Point<f64>, extent: f64, subdivide: usize) -> Vec<Point<f64>> {
+    let mut points = Vec::with_capacity(subdivide * 4);
+
+    let p0 = pos + Vector([-extent, -extent]);
+    let p1 = pos + Vector([extent, -extent]);
+    let p2 = pos + Vector([extent, extent]);
+    let p3 = pos + Vector([-extent, extent]);
+
+    points_along(&p3, &p0, subdivide, &mut points);
+    points_along(&p0, &p1, subdivide, &mut points);
+    points_along(&p1, &p2, subdivide, &mut points);
+    points_along(&p2, &p3, subdivide, &mut points);
+
+    points
+}
+
+pub fn points_cube(pos: Point<f64>, extent: f64) -> Vec<Point<f64>> {
+    points_cube_subdivide(pos, extent, 1)
 }
 
 fn plot_net(net: &TriangularNetwork<f64>, plot_ui: &mut PlotUi, render_supertri: bool) {
@@ -310,5 +361,21 @@ impl eframe::App for MyApp {
                 );
             });
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_lerp() {
+        assert_eq!(lerp_f64(1.0, 3.0, 0.0), 1.0);
+        assert_eq!(lerp_f64(1.0, 3.0, 1.0), 3.0);
+
+        assert_eq!(
+            lerp_pf64(&Point::new([0.0, 0.0]), &Point::new([2.0, 2.0]), 0.5),
+            Point::new([1.0, 1.0])
+        );
     }
 }

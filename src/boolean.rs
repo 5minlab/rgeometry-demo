@@ -312,18 +312,9 @@ impl<T: PolygonScalar + Clone> Simplex<T> {
 
 #[cfg(test)]
 mod test {
+    use crate::demo::points_cube_subdivide;
+
     use super::*;
-
-    fn lerp_f64(v0: f64, v1: f64, t: f64) -> f64 {
-        v0 + (v1 - v0) * t
-    }
-
-    fn lerp_pf64(p0: &Point<f64>, p1: &Point<f64>, t: f64) -> Point<f64> {
-        Point::new([
-            lerp_f64(p0.array[0], p1.array[0], t),
-            lerp_f64(p0.array[1], p1.array[1], t),
-        ])
-    }
 
     #[test]
     fn simplex_sign() {
@@ -408,41 +399,13 @@ mod test {
         assert_eq!(s.characteristic(&Point::new([0.5, 0.5])), 0.0);
     }
 
-    fn points_along(
-        src: &Point<f64>,
-        dst: &Point<f64>,
-        subdivide: usize,
-        out: &mut Vec<Point<f64>>,
-    ) {
-        for i in 0..subdivide {
-            let t = ((i + 1) as f64) / (subdivide as f64);
-            out.push(lerp_pf64(src, dst, t));
-        }
-    }
-
     fn polygon_cube_subdivide(pos: Point<f64>, extent: f64, subdivide: usize) -> Polygon<f64> {
-        let mut points = Vec::new();
-
-        let p0 = pos + Vector([-extent, -extent]);
-        let p1 = pos + Vector([extent, -extent]);
-        let p2 = pos + Vector([extent, extent]);
-        let p3 = pos + Vector([-extent, extent]);
-
-        points_along(&p3, &p0, subdivide, &mut points);
-        points_along(&p0, &p1, subdivide, &mut points);
-        points_along(&p1, &p2, subdivide, &mut points);
-        points_along(&p2, &p3, subdivide, &mut points);
-
+        let points = points_cube_subdivide(pos, extent, subdivide);
         Polygon::new(points).expect("polygon_cube_subdivide")
     }
 
     fn polygon_cube(pos: Point<f64>, extent: f64) -> Polygon<f64> {
-        let p0 = pos + Vector([-extent, -extent]);
-        let p1 = pos + Vector([extent, -extent]);
-        let p2 = pos + Vector([extent, extent]);
-        let p3 = pos + Vector([-extent, extent]);
-
-        Polygon::new(vec![p0, p1, p2, p3]).expect("polygon_cube")
+        polygon_cube_subdivide(pos, extent, 1)
     }
 
     #[test]
@@ -652,16 +615,5 @@ mod test {
         } else {
             todo!();
         }
-    }
-
-    #[test]
-    fn test_lerp() {
-        assert_eq!(lerp_f64(1.0, 3.0, 0.0), 1.0);
-        assert_eq!(lerp_f64(1.0, 3.0, 1.0), 3.0);
-
-        assert_eq!(
-            lerp_pf64(&Point::new([0.0, 0.0]), &Point::new([2.0, 2.0]), 0.5),
-            Point::new([1.0, 1.0])
-        );
     }
 }

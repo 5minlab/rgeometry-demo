@@ -60,10 +60,10 @@ pub struct CutResult {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-enum TriangularNetworkLocation {
+pub enum TriangularNetworkLocation {
     InTriangle(TriIdx),
     // colinear with edge
-    Colinear(Edge),
+    OnEdge(Edge),
     Outside(Edge),
 }
 
@@ -143,7 +143,7 @@ where
     Point::new([x / l, y / l])
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct TriangularNetwork<T> {
     pub vertices: Vec<Point<T>>,
     pub triangles: Vec<Triangle>,
@@ -778,7 +778,7 @@ impl<T: PolygonScalar + Copy> TriangularNetwork<T> {
                 self.check_invariant("post-InTriangle")?;
             }
 
-            Colinear(Edge {
+            OnEdge(Edge {
                 tri: idx_t,
                 sub: idx_neighbor,
             }) => {
@@ -881,7 +881,7 @@ impl<T: PolygonScalar + Copy> TriangularNetwork<T> {
         self.check_invariant("post-insert")
     }
 
-    fn locate(&self, start: TriIdx, p: &Point<T>) -> TriangularNetworkLocation {
+    pub fn locate(&self, start: TriIdx, p: &Point<T>) -> TriangularNetworkLocation {
         use Orientation::*;
         use TriangularNetworkLocation::*;
 
@@ -903,14 +903,14 @@ impl<T: PolygonScalar + Copy> TriangularNetwork<T> {
             (_, ClockWise, _) => Outside(Edge::new(start, SubIdx(2))),
             (_, _, ClockWise) => Outside(Edge::new(start, SubIdx(0))),
             // TODO: (Colinear, Colinear, _) -> exact point?
-            (CoLinear, CounterClockWise, CounterClockWise) => Colinear(Edge::new(start, SubIdx(1))),
-            (CounterClockWise, CoLinear, CounterClockWise) => Colinear(Edge::new(start, SubIdx(2))),
-            (CounterClockWise, CounterClockWise, CoLinear) => Colinear(Edge::new(start, SubIdx(0))),
+            (CoLinear, CounterClockWise, CounterClockWise) => OnEdge(Edge::new(start, SubIdx(1))),
+            (CounterClockWise, CoLinear, CounterClockWise) => OnEdge(Edge::new(start, SubIdx(2))),
+            (CounterClockWise, CounterClockWise, CoLinear) => OnEdge(Edge::new(start, SubIdx(0))),
             _ => panic!("{:?}", (d0, d1, d2)),
         }
     }
 
-    fn locate_recursive(&self, p: &Point<T>) -> TriangularNetworkLocation {
+    pub fn locate_recursive(&self, p: &Point<T>) -> TriangularNetworkLocation {
         let mut start = TriIdx(0);
 
         loop {
@@ -918,7 +918,7 @@ impl<T: PolygonScalar + Copy> TriangularNetwork<T> {
 
             start = match self.locate(start, p) {
                 InTriangle(idx) => return InTriangle(idx),
-                Colinear(e) => return Colinear(e),
+                OnEdge(e) => return OnEdge(e),
                 Outside(e) => {
                     match self.tri(e.tri).neighbor(e.sub) {
                         Some(idx) => idx,
@@ -1190,11 +1190,11 @@ mod test {
         let net = TriangularNetwork::new(p0, p1, p2);
 
         let cases = vec![
-            (0.5, 0.0, Colinear(Edge::new(TriIdx(0), SubIdx(1)))),
+            (0.5, 0.0, OnEdge(Edge::new(TriIdx(0), SubIdx(1)))),
             (0.5, -0.1, Outside(Edge::new(TriIdx(0), SubIdx(1)))),
-            (1.0, 0.5, Colinear(Edge::new(TriIdx(0), SubIdx(2)))),
+            (1.0, 0.5, OnEdge(Edge::new(TriIdx(0), SubIdx(2)))),
             (1.1, 0.5, Outside(Edge::new(TriIdx(0), SubIdx(2)))),
-            (0.5, 0.5, Colinear(Edge::new(TriIdx(0), SubIdx(0)))),
+            (0.5, 0.5, OnEdge(Edge::new(TriIdx(0), SubIdx(0)))),
             (0.4, 0.6, Outside(Edge::new(TriIdx(0), SubIdx(0)))),
             (0.5, 0.1, InTriangle(TriIdx(0))),
         ];

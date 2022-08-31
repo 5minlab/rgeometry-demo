@@ -1652,6 +1652,7 @@ dependencies = [
  "criterion",
  "eframe",
  "rand",
+ "rand_chacha",
  "rgeometry",
  "tracing-subscriber",
  "tracing-wasm",

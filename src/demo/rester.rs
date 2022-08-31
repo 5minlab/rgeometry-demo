@@ -1,16 +1,13 @@
 use crate::delaunay::SubIdx;
 
-use super::{plot_line, points_uniform, Demo};
+use super::{plot_line, points_tri, Demo};
 use eframe::egui::{
     self,
     epaint::Color32,
     plot::{self, PlotPoint, PlotPoints, Polygon},
     Key, Ui,
 };
-use rgeometry::{
-    data::{Direction, Point},
-    Orientation,
-};
+use rgeometry::data::Point;
 
 pub struct DemoRester {
     view: f64,
@@ -18,25 +15,13 @@ pub struct DemoRester {
     verts: [Point<f64>; 3],
 }
 
-fn gen_tri(view: f64) -> [Point<f64>; 3] {
-    let verts = points_uniform(view, 3);
-
-    let p0 = verts[0];
-    let p1 = verts[1];
-    let p2 = verts[2];
-
-    match Point::orient_along_direction(&p0, Direction::Through(&p1), &p2) {
-        Orientation::CounterClockWise => [p0, p2, p1],
-        _ => [p0, p1, p2],
-    }
-}
-
 impl DemoRester {
     #[allow(unused)]
     pub fn new(view: f64) -> Self {
+        let mut rng = rand::thread_rng();
         Self {
             view,
-            verts: gen_tri(view),
+            verts: points_tri(&mut rng, view),
         }
     }
 }
@@ -59,7 +44,8 @@ impl Demo for DemoRester {
         });
 
         if regen {
-            self.verts = gen_tri(self.view);
+            let mut rng = rand::thread_rng();
+            self.verts = points_tri(&mut rng, self.view);
         }
     }
 

@@ -13,7 +13,8 @@ fn gen_delaunay_points(view: f64, square: bool) -> Vec<Point<f64>> {
     if square {
         points_grid(view, 3)
     } else {
-        points_uniform(view, 20)
+        let mut rng = rand::thread_rng();
+        points_uniform(&mut rng, view, 20)
     }
 }
 
