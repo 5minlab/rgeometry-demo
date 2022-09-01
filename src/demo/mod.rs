@@ -2,7 +2,7 @@ use crate::boolean::SimplicalChain;
 use crate::delaunay::VertIdx;
 
 use crate::delaunay::{TriIdx, TriangularNetwork};
-use rand::{thread_rng, Rng};
+use rand::Rng;
 use rgeometry::{data::Direction, Orientation};
 
 use eframe::{
@@ -218,8 +218,7 @@ impl Rect {
     }
 }
 
-pub fn gen_rects(view: f64, count: usize) -> Vec<Rect> {
-    let mut rng = thread_rng();
+pub fn gen_rects<R: Rng>(rng: &mut R, view: f64, count: usize) -> Vec<Rect> {
     let mut rects = Vec::with_capacity(count);
 
     rects.push(Rect::new(view / 4.0, view / 4.0));

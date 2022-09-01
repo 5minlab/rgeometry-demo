@@ -25,6 +25,10 @@ harness = false
 name = "boolean"
 harness = false
 
+[[bench]]
+name = "delaunay"
+harness = false
+
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tracing-subscriber = "0.3"
 

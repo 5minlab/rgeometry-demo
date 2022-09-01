@@ -54,7 +54,9 @@ pub struct DemoBooleanTri {
 impl DemoBooleanTri {
     #[allow(unused)]
     pub fn new(view: f64) -> Self {
-        let rects = gen_rects(view, 100);
+        let mut rng = rand::thread_rng();
+
+        let rects = gen_rects(&mut rng, view, 100);
         let sx = rect_union(&rects);
         let opt_cut = true;
         let net = build_net(view, &sx, opt_cut);
@@ -84,13 +86,14 @@ impl Demo for DemoBooleanTri {
     }
 
     fn ui(&mut self, t: f64, ctx: &egui::Context, ui: &mut Ui) {
+        let mut rng = rand::thread_rng();
         if ctx.input().key_pressed(egui::Key::G) {
-            self.rects = gen_rects(self.view, self.rects.len());
+            self.rects = gen_rects(&mut rng, self.view, self.rects.len());
         }
 
         ui.horizontal(|ui| {
             if ui.button("(R) regenerate").clicked() {
-                self.rects = gen_rects(self.view, self.rects.len());
+                self.rects = gen_rects(&mut rng, self.view, self.rects.len());
             }
             ui.separator();
             ui.label("render?");

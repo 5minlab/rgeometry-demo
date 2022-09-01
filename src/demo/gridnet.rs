@@ -405,9 +405,11 @@ pub struct DemoGridNet {
 impl DemoGridNet {
     #[allow(unused)]
     pub fn new(view: f64) -> Self {
+        let mut rng = rand::thread_rng();
+
         let count = 100;
 
-        let rects = gen_rects(view, count);
+        let rects = gen_rects(&mut rng, view, count);
         let opts = EguiRectOpts {
             ..EguiRectOpts::default()
         };
@@ -433,8 +435,10 @@ impl Demo for DemoGridNet {
         "gridnet"
     }
     fn ui(&mut self, t: f64, ctx: &egui::Context, ui: &mut egui::Ui) {
+        let mut rng = rand::thread_rng();
+
         if ctx.input().key_released(Key::G) {
-            self.rects = gen_rects(self.view, self.count);
+            self.rects = gen_rects(&mut rng, self.view, self.count);
         }
 
         self.egui_rects = self

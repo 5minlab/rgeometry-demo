@@ -31,7 +31,8 @@ fn rect_union(rects: &[Rect]) -> SimplicalChain<f64> {
 impl DemoBoolean {
     #[allow(unused)]
     pub fn new(view: f64) -> Self {
-        let rects = gen_rects(view, 100);
+        let mut rng = rand::thread_rng();
+        let rects = gen_rects(&mut rng, view, 100);
         let sx = rect_union(&rects);
 
         Self {
@@ -56,9 +57,10 @@ impl Demo for DemoBoolean {
     }
 
     fn ui(&mut self, t: f64, _ctx: &egui::Context, ui: &mut Ui) {
+        let mut rng = rand::thread_rng();
         ui.horizontal(|ui| {
             if ui.button("regenerate").clicked() {
-                self.rects = gen_rects(self.view, 100);
+                self.rects = gen_rects(&mut rng, self.view, 100);
             }
             ui.separator();
             ui.checkbox(&mut self.opt_circle, "circle?");

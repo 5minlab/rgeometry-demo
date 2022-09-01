@@ -63,6 +63,8 @@ pub struct CutResult {
 pub enum TriangularNetworkLocation {
     InTriangle(TriIdx),
     // colinear with edge
+    OnVertex(TriIdx, SubIdx),
+    // colinear with edge
     OnEdge(Edge),
     Outside(Edge),
 }
@@ -777,6 +779,9 @@ impl<T: PolygonScalar + Copy> TriangularNetwork<T> {
 
                 self.check_invariant("post-InTriangle")?;
             }
+            OnVertex(_, _) => {
+                return Ok(());
+            }
 
             OnEdge(Edge {
                 tri: idx_t,
@@ -885,6 +890,12 @@ impl<T: PolygonScalar + Copy> TriangularNetwork<T> {
         use Orientation::*;
         use TriangularNetworkLocation::*;
 
+        for i in 0..3 {
+            if p == self.tri_vert(start, SubIdx(i)) {
+                return OnVertex(start, SubIdx(i));
+            }
+        }
+
         let p0 = self.tri_vert(start, SubIdx(0));
         let p1 = self.tri_vert(start, SubIdx(1));
         let p2 = self.tri_vert(start, SubIdx(2));
@@ -917,8 +928,6 @@ impl<T: PolygonScalar + Copy> TriangularNetwork<T> {
             use TriangularNetworkLocation::*;
 
             start = match self.locate(start, p) {
-                InTriangle(idx) => return InTriangle(idx),
-                OnEdge(e) => return OnEdge(e),
                 Outside(e) => {
                     match self.tri(e.tri).neighbor(e.sub) {
                         Some(idx) => idx,
@@ -929,6 +938,7 @@ impl<T: PolygonScalar + Copy> TriangularNetwork<T> {
                         }
                     }
                 }
+                e => return e,
             };
         }
     }
