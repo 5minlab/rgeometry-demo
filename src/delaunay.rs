@@ -933,6 +933,7 @@ impl<T: PolygonScalar + Copy> TriangularNetwork<T> {
         }
     }
 
+    // https://arxiv.org/abs/1403.3905
     pub fn visibility(&self, sx: &SimplicalChain<T>, p: &Point<T>) -> Vec<(Point<T>, Point<T>)> {
         use TriangularNetworkLocation::*;
 
