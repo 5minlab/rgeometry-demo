@@ -220,17 +220,62 @@ impl<T: PolygonScalar + Copy> TriangularNetwork<T> {
     fn find_vert_dest(&self, v_from: VertIdx, v_to: VertIdx) -> Option<CutIter> {
         use Orientation::*;
 
+        let p_from = self.vert(v_from);
+        let l = self.locate_recursive(&p_from);
+
+        let (tri0, sub0) = match l {
+            TriangularNetworkLocation::OnVertex(tri, sub) => (tri, sub),
+            _ => return None,
+        };
+
         let p_end = self.vert(v_to);
         let mut candidates = Vec::new();
 
-        for (t_idx, t) in self.triangles.iter().enumerate() {
-            let t_idx = TriIdx(t_idx);
-            if let Some(idx) = t.vertex_idx(v_from) {
-                if t.vert(idx.ccw()) == v_to || t.vert(idx.cw()) == v_to {
-                    // already splitted
-                    return None;
+        // TODO: to iterator
+        // ccw triangles
+        let mut curtri = tri0;
+        let mut cursub = sub0;
+        loop {
+            let t = self.tri(curtri);
+            assert_eq!(t.vert(cursub), v_from);
+            if t.vert(cursub.cw()) == v_to {
+                return None;
+            }
+            candidates.push((curtri, cursub));
+
+            match self.edge_duel(&Edge::new(curtri, cursub)) {
+                Some(Edge { tri, sub }) => {
+                    if tri == tri0 {
+                        break;
+                    }
+                    curtri = tri;
+                    cursub = sub.cw();
                 }
-                candidates.push((t_idx, idx));
+                None => break,
+            }
+        }
+
+        // TODO: to iterator
+        // cw triangles
+        let mut curtri = tri0;
+        let mut cursub = sub0;
+        loop {
+            let t = self.tri(curtri);
+            assert_eq!(t.vert(cursub), v_from);
+            if t.vert(cursub.ccw()) == v_to {
+                return None;
+            }
+            candidates.push((curtri, cursub));
+
+            match self.edge_duel(&Edge::new(curtri, cursub.ccw())) {
+                Some(Edge { tri, sub }) => {
+                    if tri == tri0 {
+                        break;
+                    }
+                    curtri = tri;
+                    cursub = sub;
+                }
+                None => break,
             }
         }
 
