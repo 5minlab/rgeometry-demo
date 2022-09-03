@@ -1,5 +1,4 @@
 use crate::boolean::SimplicalChain;
-use crate::delaunay::VertIdx;
 
 use crate::delaunay::{TriIdx, TriangularNetwork};
 use rand::Rng;
@@ -237,6 +236,8 @@ pub fn gen_rects<R: Rng>(rng: &mut R, view: f64, count: usize) -> Vec<Rect> {
 }
 
 pub fn build_net(view: f64, sx: &SimplicalChain<f64>, cut: bool) -> TriangularNetwork<f64> {
+    use std::collections::*;
+
     let v = view * 4.0;
     let mut net = TriangularNetwork::new(
         Point::new([-v, -v]),
@@ -244,20 +245,26 @@ pub fn build_net(view: f64, sx: &SimplicalChain<f64>, cut: bool) -> TriangularNe
         Point::new([0.0, v]),
     );
 
+    let mut h = BTreeMap::new();
     let mut r = std::usize::MAX;
     for s in &sx.simplices {
-        if let Err(e) = net.insert(&s.dst, &mut r) {
-            eprintln!("TriangularNetwork::insert: {:?}", e);
-            return net;
+        match net.insert(&s.dst, &mut r) {
+            Ok(idx) => {
+                h.insert(s.dst, idx);
+            }
+            Err(e) => {
+                eprintln!("TriangularNetwork::insert: {:?}", e);
+                return net;
+            }
         }
     }
 
     if cut {
         for s in &sx.simplices {
-            let idx0 = net.vertices.iter().position(|p| *p == s.src).unwrap();
-            let idx1 = net.vertices.iter().position(|p| *p == s.dst).unwrap();
+            let idx0 = h.get(&s.src).unwrap();
+            let idx1 = h.get(&s.dst).unwrap();
 
-            let cut = net.cut(VertIdx(idx0), VertIdx(idx1));
+            let cut = net.cut(*idx0, *idx1);
             if let Err(e) = net.cut_apply(&cut) {
                 eprintln!("failed to cut: cut={:?}, e={:?}", cut, e);
                 break;
