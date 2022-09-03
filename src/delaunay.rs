@@ -774,11 +774,11 @@ impl<T: PolygonScalar + Copy> TriangularNetwork<T> {
         Ok(true)
     }
 
-    pub fn insert(&mut self, p: &Point<T>, reductions: &mut usize) -> Result<()> {
+    pub fn insert(&mut self, p: &Point<T>, reductions: &mut usize) -> Result<VertIdx> {
         use TriangularNetworkLocation::*;
 
         if *reductions == 0 {
-            return Ok(());
+            anyhow::bail!("reduction");
         }
         *reductions -= 1;
 
@@ -823,23 +823,14 @@ impl<T: PolygonScalar + Copy> TriangularNetwork<T> {
                 self.maybe_swap(idx_t2, reductions)?;
 
                 self.check_invariant("post-InTriangle")?;
+                Ok(idx_v)
             }
-            OnVertex(_, _) => {
-                return Ok(());
-            }
+            OnVertex(tri, sub) => Ok(self.tri(tri).vert(sub)),
 
             OnEdge(Edge {
                 tri: idx_t,
                 sub: idx_neighbor,
             }) => {
-                if p == self.tri_vert(idx_t, SubIdx(0))
-                    || p == self.tri_vert(idx_t, SubIdx(1))
-                    || p == self.tri_vert(idx_t, SubIdx(2))
-                {
-                    // ignore duplicated points
-                    return Ok(());
-                }
-
                 let idx_t0 = idx_t;
                 let t0 = self.tri(idx_t0).clone();
 
@@ -921,14 +912,13 @@ impl<T: PolygonScalar + Copy> TriangularNetwork<T> {
                 }
 
                 self.check_invariant("post-Colinear")?;
+                Ok(idx_v)
             }
 
             Outside(_e) => {
                 todo!();
             }
         }
-
-        self.check_invariant("post-insert")
     }
 
     pub fn locate(&self, start: TriIdx, p: &Point<T>) -> TriangularNetworkLocation {
