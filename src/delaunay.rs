@@ -1220,6 +1220,7 @@ impl Triangle {
         todo!();
     }
 
+    #[allow(unused)]
     fn vertex_idx(&self, v_idx: VertIdx) -> Option<SubIdx> {
         self.vertices.iter().position(|p| *p == v_idx).map(SubIdx)
     }
