@@ -44,6 +44,10 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         c.bench_function("TriangularNetwork::visibility", |b| {
             b.iter(|| net.visibility(&sx, &Point::new([0.0, 0.0])))
         });
+
+        c.bench_function("SimplicalChain::characteristic", |b| {
+            b.iter(|| sx.characteristic(&Point::new([0.0, 0.0])))
+        });
     }
 }
 

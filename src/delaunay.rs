@@ -1040,53 +1040,56 @@ impl<T: PolygonScalar + Copy> TriangularNetwork<T> {
             eprintln!("{:?}", e);
         }
 
-        match self.locate_recursive(p) {
+        let queries = match self.locate_recursive(p) {
             InTriangle(idx) => {
                 let t = self.tri(idx);
-                let mut out = Vec::new();
+                let mut queries = Vec::new();
                 for i in 0..3 {
                     let sub = SubIdx(i);
                     let edge = Edge::new(idx, sub);
                     let cw = t.vert(sub.cw());
                     let ccw = t.vert(sub);
                     if let Some(duel) = self.edge_duel(&edge) {
-                        self.visibility_tri(
-                            sx,
-                            duel,
-                            VisibilityQuery {
-                                src: p.clone(),
-                                cw,
-                                ccw,
-                            },
-                            &mut out,
-                        );
+                        queries.push(VisibilityQuery {
+                            src: p.clone(),
+                            edge: duel,
+                            cw,
+                            ccw,
+                        });
                     }
                 }
-
-                let mut segments = out
-                    .into_iter()
-                    .map(|s| {
-                        let t = self.tri(s.edge.tri);
-                        let p_start = self.vert(t.vert(s.edge.sub));
-                        let p_end = self.vert(t.vert(s.edge.sub.cw()));
-
-                        let l = Line::new_through(p_start, p_end);
-
-                        let l_ccw = Line::new_through(p, self.vert(s.ccw));
-                        let l_cw = Line::new_through(p, self.vert(s.cw));
-
-                        let p_ccw = l.intersection_point(&l_ccw).unwrap();
-                        let p_cw = l.intersection_point(&l_cw).unwrap();
-
-                        (p_cw, p_ccw)
-                    })
-                    .collect::<Vec<_>>();
-
-                segments.sort_by(|a, b| p.ccw_cmp_around(&a.0, &b.0));
-                segments
+                queries
             }
-            _ => todo!(),
+            _ => return vec![],
+        };
+
+        let mut out = Vec::new();
+        for q in queries {
+            let count = self.visibility_tri(sx, q, &mut out);
+            eprintln!("count={:?}", count);
         }
+
+        let mut segments = out
+            .into_iter()
+            .map(|s| {
+                let t = self.tri(s.edge.tri);
+                let p_start = self.vert(t.vert(s.edge.sub));
+                let p_end = self.vert(t.vert(s.edge.sub.cw()));
+
+                let l = Line::new_through(p_start, p_end);
+
+                let l_ccw = Line::new_through(p, self.vert(s.ccw));
+                let l_cw = Line::new_through(p, self.vert(s.cw));
+
+                let p_ccw = l.intersection_point(&l_ccw).unwrap();
+                let p_cw = l.intersection_point(&l_cw).unwrap();
+
+                (p_cw, p_ccw)
+            })
+            .collect::<Vec<_>>();
+
+        segments.sort_by(|a, b| p.ccw_cmp_around(&a.0, &b.0));
+        segments
     }
 
     pub fn centroid(&self, tri: TriIdx) -> Point<T> {
@@ -1103,10 +1106,11 @@ impl<T: PolygonScalar + Copy> TriangularNetwork<T> {
     fn visibility_tri(
         &self,
         sx: &SimplicalChain<T>,
-        e: Edge,
         q: VisibilityQuery<T>,
         out: &mut Vec<VisibilitySegment>,
-    ) {
+    ) -> usize {
+        let mut count = 1;
+        let e = q.edge;
         use Orientation::*;
 
         let p = &q.src;
@@ -1122,7 +1126,7 @@ impl<T: PolygonScalar + Copy> TriangularNetwork<T> {
                 ccw: q.ccw,
                 cw: q.cw,
             });
-            return;
+            return count;
         }
 
         let v1 = t.vert(e.sub.ccw());
@@ -1141,11 +1145,11 @@ impl<T: PolygonScalar + Copy> TriangularNetwork<T> {
 
             let e = Edge::new(e.tri, e.sub.cw());
             if let Some(duel) = self.edge_duel(&e) {
-                self.visibility_tri(
+                count += self.visibility_tri(
                     sx,
-                    duel,
                     VisibilityQuery {
                         src: q.src.clone(),
+                        edge: duel,
                         ccw,
                         cw,
                     },
@@ -1165,11 +1169,11 @@ impl<T: PolygonScalar + Copy> TriangularNetwork<T> {
 
             let e = Edge::new(e.tri, e.sub.ccw());
             if let Some(duel) = self.edge_duel(&e) {
-                self.visibility_tri(
+                count += self.visibility_tri(
                     sx,
-                    duel,
                     VisibilityQuery {
                         src: q.src.clone(),
+                        edge: duel,
                         ccw,
                         cw,
                     },
@@ -1177,6 +1181,7 @@ impl<T: PolygonScalar + Copy> TriangularNetwork<T> {
                 );
             }
         }
+        count
     }
 }
 
@@ -1188,6 +1193,7 @@ struct VisibilitySegment {
 
 struct VisibilityQuery<T> {
     src: Point<T>,
+    edge: Edge,
     ccw: VertIdx,
     cw: VertIdx,
 }
