@@ -4,6 +4,7 @@ use rand_chacha::ChaCha20Rng;
 use rgeometry::data::*;
 use rgeometry_playground::boolean::SimplicalChain;
 use rgeometry_playground::demo::*;
+use rgeometry_playground::raster::raster;
 
 pub fn criterion_benchmark(c: &mut Criterion) {
     let seed: <ChaCha20Rng as SeedableRng>::Seed = Default::default();
@@ -41,12 +42,25 @@ pub fn criterion_benchmark(c: &mut Criterion) {
 
         let (net, constraints) = build_net(view, &sx, true);
 
+        let p0 = Point::new([0.0, 0.0]);
         c.bench_function("TriangularNetwork::visibility", |b| {
-            b.iter(|| net.visibility(&constraints, &Point::new([0.0, 0.0])))
+            b.iter(|| net.visibility(&constraints, &p0))
+        });
+
+        let vis = net.visibility(&constraints, &p0);
+        c.bench_function("TriangularNetwork::visibility raster", |b| {
+            b.iter(|| {
+                let mut sum = 0.0;
+                for (p1, p2) in &vis {
+                    raster(&[p0, *p1, *p2], |x, y| {
+                        sum += x + y;
+                    });
+                }
+            })
         });
 
         c.bench_function("SimplicalChain::characteristic", |b| {
-            b.iter(|| sx.characteristic(&Point::new([0.0, 0.0])))
+            b.iter(|| sx.characteristic(&p0))
         });
     }
 }
