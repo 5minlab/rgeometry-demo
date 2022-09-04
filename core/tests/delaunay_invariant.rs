@@ -1,4 +1,3 @@
-#[cfg(test)]
 mod tests {
     use core::boolean::SimplicalChain;
     use core::*;
@@ -23,6 +22,21 @@ mod tests {
             r.rot = t;
         }
 
+        test_build_visibility(view, &rects);
+    }
+
+    #[test]
+    fn crash2() {
+        let view = 30f64;
+        let mut rects = Vec::new();
+        for i in 0..10 {
+            rects.push(Rect::new(2.0, 2.0).pos(i as f64 + 0.1, i as f64 + 0.1));
+        }
+
+        test_build_visibility(view, &rects);
+    }
+
+    fn test_build_visibility(view: f64, rects: &[Rect]) {
         let mut sx = SimplicalChain::default();
         for r in rects {
             let p = r.polygon();

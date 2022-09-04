@@ -96,6 +96,9 @@ checksum = "23b62fc65de8e4e7f52534fb52b0f3ed04746ae267519eef2a83941e8085068b"
 name = "asm"
 version = "0.1.0"
 dependencies = [
+ "core",
+ "js-sys",
+ "rgeometry",
  "wasm-bindgen",
 ]
 

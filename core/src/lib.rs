@@ -201,7 +201,17 @@ pub fn build_net(
     for s in &sx.simplices {
         match net.insert(&s.dst, &mut r) {
             Ok(idx) => {
-                h.insert(s.dst, idx);
+                let mut p = s.dst;
+                h.insert(p, idx);
+                if p.array[0] == -0.0 {
+                    p.array[0] = 0.0;
+                    h.insert(p, idx);
+                }
+
+                if p.array[0] == -0.0 {
+                    p.array[0] = 0.0;
+                    h.insert(p, idx);
+                }
             }
             Err(e) => {
                 eprintln!("TriangularNetwork::insert: {:?}", e);
