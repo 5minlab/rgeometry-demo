@@ -222,6 +222,16 @@ impl<T: PolygonScalar + Copy> TriangularNetwork<T> {
         Some(Edge::new(idx_neighbor, sub_neighbor))
     }
 
+    pub fn edge_to(&self, edge: &Edge) -> VertIdx {
+        let t = self.tri(edge.tri);
+        t.vert(edge.sub)
+    }
+
+    pub fn edge_from(&self, edge: &Edge) -> VertIdx {
+        let t = self.tri(edge.tri);
+        t.vert(edge.sub.cw())
+    }
+
     fn find_vert_dest(&self, v_from: VertIdx, v_to: VertIdx) -> Option<CutIter> {
         use Orientation::*;
 
@@ -425,30 +435,30 @@ impl<T: PolygonScalar + Copy> TriangularNetwork<T> {
         &mut self,
         idx_p: Option<Edge>,
         slice: &[CutEdge],
-        indices: &mut Vec<TriIdx>,
-        proj: &mut Vec<(Edge, Edge)>,
+        indices: &[TriIdx],
+        indices_remain: &mut Vec<TriIdx>,
+        dirty: &mut Vec<Edge>,
         out: &mut Vec<(VertIdx, VertIdx)>,
     ) -> Option<TriIdx> {
         assert!(slice.len() > 1);
+
         if slice.len() == 2 {
             if let CutEdge {
-                inner,
-                outer: Some(mut outer),
+                inner: _inner,
+                outer: Some(outer),
                 vert: _,
             } = slice[1]
             {
-                if let Some(p) = idx_p {
-                    proj.push((inner, p));
+                if indices.contains(&outer.tri) {
+                    dirty.push(idx_p.unwrap());
+                    return None;
+                } else {
+                    *self.tri_mut(outer.tri).neighbor_mut(outer.sub) = idx_p.map(|e| e.tri);
+                    return Some(outer.tri);
                 }
-
-                if let Some((_before, after)) = proj.iter().find(|t| t.0 == outer) {
-                    outer = *after;
-                }
-
-                *self.tri_mut(outer.tri).neighbor_mut(outer.sub) = idx_p.map(|e| e.tri);
-                return Some(outer.tri);
+            } else {
+                todo!();
             }
-            return None;
         }
 
         let last = slice.len() - 1;
@@ -470,20 +480,22 @@ impl<T: PolygonScalar + Copy> TriangularNetwork<T> {
         }
         let v_mid = slice[i_mid].vert;
 
-        let idx_self = indices.pop().unwrap();
+        let idx_self = indices_remain.pop().unwrap();
 
         let idx_t0 = self.cut_apply_subdivide(
             Some(Edge::new(idx_self, SubIdx(1))),
             &slice[..i_mid + 1],
             indices,
-            proj,
+            indices_remain,
+            dirty,
             out,
         );
         let idx_t1 = self.cut_apply_subdivide(
             Some(Edge::new(idx_self, SubIdx(2))),
             &slice[i_mid..],
             indices,
-            proj,
+            indices_remain,
+            dirty,
             out,
         );
 
@@ -529,7 +541,7 @@ impl<T: PolygonScalar + Copy> TriangularNetwork<T> {
         }
 
         let mut indices = res.cut_triangles.clone();
-        let mut proj = Vec::new();
+        let mut dirty = Vec::new();
 
         let mut out = Vec::new();
         let verts = self.cut_apply_prepare(res);
@@ -552,7 +564,14 @@ impl<T: PolygonScalar + Copy> TriangularNetwork<T> {
                 None => slice.len() - 1,
             };
             let idx = self
-                .cut_apply_subdivide(None, &slice[..i + 1], &mut indices, &mut proj, &mut out)
+                .cut_apply_subdivide(
+                    None,
+                    &slice[..i + 1],
+                    &res.cut_triangles,
+                    &mut indices,
+                    &mut dirty,
+                    &mut out,
+                )
                 .unwrap();
             out_triangles.push(idx);
             slice = &slice[i..];
@@ -565,6 +584,19 @@ impl<T: PolygonScalar + Copy> TriangularNetwork<T> {
 
             *self.tri_mut(t_ccw).neighbor_mut(SubIdx(0)) = Some(t_cw);
             *self.tri_mut(t_cw).neighbor_mut(SubIdx(0)) = Some(t_ccw);
+        }
+
+        for i in 0..dirty.len() {
+            for j in (i + 1)..dirty.len() {
+                let e0 = &dirty[i];
+                let e1 = &dirty[j];
+
+                if self.edge_from(e0) == self.edge_to(e1) && self.edge_to(e0) == self.edge_from(e1)
+                {
+                    *self.tri_mut(e0.tri).neighbor_mut(e0.sub) = Some(e1.tri);
+                    *self.tri_mut(e1.tri).neighbor_mut(e1.sub) = Some(e0.tri);
+                }
+            }
         }
 
         assert!(indices.is_empty());
