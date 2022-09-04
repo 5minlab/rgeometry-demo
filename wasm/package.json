@@ -1,6 +1,7 @@
 {
   "scripts": {
-    "build": "wasm-pack build -t nodejs"
+    "build": "wasm-pack build -t nodejs -d node",
+    "build-web": "wasm-pack build -t web -d pkg"
   },
   "devDependencies": {
     "@wasm-tool/wasm-pack-plugin": "1.5.0"
