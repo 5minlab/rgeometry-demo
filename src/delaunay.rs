@@ -241,13 +241,13 @@ impl<T: PolygonScalar + Copy> TriangularNetwork<T> {
             if t.vert(cursub.cw()) == v_to {
                 return None;
             }
+            if candidates.contains(&(curtri, cursub)) {
+                break;
+            }
             candidates.push((curtri, cursub));
 
             match self.edge_duel(&Edge::new(curtri, cursub)) {
                 Some(Edge { tri, sub }) => {
-                    if tri == tri0 {
-                        break;
-                    }
                     curtri = tri;
                     cursub = sub.cw();
                 }
@@ -264,6 +264,9 @@ impl<T: PolygonScalar + Copy> TriangularNetwork<T> {
             assert_eq!(t.vert(cursub), v_from);
             if t.vert(cursub.ccw()) == v_to {
                 return None;
+            }
+            if candidates.contains(&(curtri, cursub)) {
+                break;
             }
             candidates.push((curtri, cursub));
 
@@ -1071,26 +1074,10 @@ impl<T: PolygonScalar + Copy> TriangularNetwork<T> {
             return;
         }
 
-        let v0 = t.vert(e.sub);
         let v1 = t.vert(e.sub.ccw());
-        let v2 = t.vert(e.sub.cw());
 
-        // let d_ccw_0 = Point::orient_along_direction(p, Direction::Through(p_ccw), self.vert(v0));
         let d_ccw_1 = Point::orient_along_direction(p, Direction::Through(p_ccw), self.vert(v1));
-        let d_ccw_2 = Point::orient_along_direction(p, Direction::Through(p_ccw), self.vert(v2));
-
-        let d_cw_0 = Point::orient_along_direction(p, Direction::Through(p_cw), self.vert(v0));
         let d_cw_1 = Point::orient_along_direction(p, Direction::Through(p_cw), self.vert(v1));
-        // let d_cw_2 = Point::orient_along_direction(p, Direction::Through(p_cw), self.vert(v2));
-
-        // invariant
-        /*
-        assert_eq!(d_ccw_0, ClockWise);
-        assert_eq!(d_cw_2, CounterClockWise);
-        */
-
-        assert_ne!(d_cw_0, CounterClockWise);
-        assert_ne!(d_ccw_2, ClockWise);
 
         // ccw side
         if d_ccw_1 != CounterClockWise {
