@@ -18,6 +18,11 @@ impl std::fmt::Debug for VertIdx {
         write!(fmt, "v{}", self.0)
     }
 }
+impl VertIdx {
+    fn is_super(&self) -> bool {
+        self.0 < 3
+    }
+}
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub struct SubIdx(pub usize);
@@ -106,10 +111,6 @@ where
         cx * cx - dx * dx + cy * cy - dy * dy,
     ]);
     d > T::from_constant(0)
-}
-
-fn is_super(idx: VertIdx) -> bool {
-    idx.0 < 3
 }
 
 #[derive(Debug)]
@@ -340,10 +341,8 @@ impl<T: PolygonScalar + Copy> TriangularNetwork<T> {
 
                     contour_ccw.push(Edge::new(t_idx, idx));
                     contour_cw.push(Edge::new(t_idx, idx.ccw()));
-                    let v1 = t.vert(idx.ccw());
-                    let v2 = t.vert(idx.cw());
 
-                    cuts.push((v1, v2));
+                    cuts.push((t.vert(idx.cw()), t.vert(idx.ccw())));
 
                     let next = self.edge_duel(&Edge::new(t_idx, idx.cw())).unwrap();
                     cur = Some(CutIter::ToEdge(next));
@@ -384,10 +383,7 @@ impl<T: PolygonScalar + Copy> TriangularNetwork<T> {
                         todo!();
                     };
 
-                    let v_t_from = t.vert(idx_n.cw());
-                    let v_t_to = t.vert(idx_n);
-
-                    cuts.push((v_t_from, v_t_to));
+                    cuts.push((t.vert(idx_n), t.vert(idx_n.cw())));
 
                     let next = self.edge_duel(&Edge::new(t_idx, idx_n)).unwrap();
                     cur = Some(CutIter::ToEdge(next));
@@ -709,10 +705,10 @@ impl<T: PolygonScalar + Copy> TriangularNetwork<T> {
             return Ok(false);
         }
 
-        let should_swap = if is_super(v0) || is_super(v2) {
+        let should_swap = if v0.is_super() || v2.is_super() {
             true
         } else {
-            if is_super(v1) || is_super(v3) {
+            if v1.is_super() || v3.is_super() {
                 false
             } else {
                 inside_circle(p0, p1, p2, p3)
@@ -1172,7 +1168,7 @@ impl std::fmt::Debug for Triangle {
 impl Triangle {
     pub fn is_super(&self) -> bool {
         let [v0, v1, v2] = self.vertices;
-        is_super(v0) || is_super(v1) || is_super(v2)
+        v0.is_super() || v1.is_super() || v2.is_super()
     }
 
     pub fn vert(&self, idx: SubIdx) -> VertIdx {
