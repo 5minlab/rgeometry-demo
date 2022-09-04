@@ -264,8 +264,7 @@ pub fn build_net(view: f64, sx: &SimplicalChain<f64>, cut: bool) -> TriangularNe
             let idx0 = h.get(&s.src).unwrap();
             let idx1 = h.get(&s.dst).unwrap();
 
-            let cut = net.cut(*idx0, *idx1);
-            if let Err(e) = net.cut_apply(&cut) {
+            if let Err(e) = net.constrain_edge(*idx0, *idx1) {
                 eprintln!("failed to cut: cut={:?}, e={:?}", cut, e);
                 break;
             }

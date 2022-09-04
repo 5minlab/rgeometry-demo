@@ -79,18 +79,17 @@ impl DemoCDT {
         }
     }
 
-    fn constraint(&mut self) {
+    fn constrain(&mut self) {
         let net = &mut self.net;
         let len = self.points_constrained.len();
         for i in 0..len {
             let p0 = VertIdx(3 + i);
             let p1 = VertIdx(3 + (i + 1) % len);
 
-            let cut = net.cut(p0, p1);
-            if cut.cut_triangles.is_empty() {
+            if let Err(e) = net.constrain_edge(p0, p1) {
+                eprintln!("constrain_edge: {:?}", e);
                 continue;
             }
-            net.cut_apply(&cut).ok();
         }
     }
 }
@@ -109,7 +108,7 @@ impl Demo for DemoCDT {
             self.opt_render_supertri = !self.opt_render_supertri;
         }
         if ctx.input().key_pressed(Key::G) {
-            self.constraint();
+            self.constrain();
         }
 
         ui.horizontal(|ui| {
@@ -124,7 +123,7 @@ impl Demo for DemoCDT {
             }
             ui.separator();
             if ui.button("force constraint").clicked() {
-                self.constraint();
+                self.constrain();
             }
         });
         ui.label("shortcuts: (D) Regenerate | (F) Toggle supertriangles | (G) Constraint");

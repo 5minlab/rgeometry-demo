@@ -19,7 +19,7 @@ impl std::fmt::Debug for VertIdx {
     }
 }
 impl VertIdx {
-    fn is_super(&self) -> bool {
+    pub fn is_super(&self) -> bool {
         self.0 < 3
     }
 }
@@ -55,22 +55,29 @@ impl Edge {
 }
 
 #[derive(Debug)]
-pub struct CutResult {
+pub struct Cut {
+    /// starting vertex of the cut
     pub from: VertIdx,
+    /// finishing vertex of the cut
     pub to: VertIdx,
+    /// list of edges which will be removed from the cut
     pub cuts: Vec<(VertIdx, VertIdx)>,
+    /// list of triangles affacted by the cut
     pub cut_triangles: Vec<TriIdx>,
     pub contour_cw: Vec<Edge>,
     pub contour_ccw: Vec<Edge>,
 }
 
+/// A location of a point, in `TriangularNetwork`
 #[derive(Debug, PartialEq, Eq)]
 pub enum TriangularNetworkLocation {
+    /// The point is inside the triangle
     InTriangle(TriIdx),
-    // colinear with edge
+    /// The points is at the vertex of the triangle
     OnVertex(TriIdx, SubIdx),
-    // colinear with edge
+    /// The points lies on an edge of the triangle
     OnEdge(Edge),
+    /// The point lies outside the triangle
     Outside(Edge),
 }
 
@@ -153,6 +160,7 @@ pub struct TriangularNetwork<T> {
 }
 
 impl<T: PolygonScalar + Copy> TriangularNetwork<T> {
+    /// Create new triangluar network.
     pub fn new(p0: Point<T>, p1: Point<T>, p2: Point<T>) -> Self {
         let (p1, p2) = match Point::orient_along_direction(&p0, Direction::Through(&p1), &p2) {
             Orientation::CounterClockWise => (p1, p2),
@@ -174,7 +182,7 @@ impl<T: PolygonScalar + Copy> TriangularNetwork<T> {
         &self.triangles[idx.0]
     }
 
-    pub fn tri_mut(&mut self, idx: TriIdx) -> &mut Triangle {
+    fn tri_mut(&mut self, idx: TriIdx) -> &mut Triangle {
         &mut self.triangles[idx.0]
     }
 
@@ -330,7 +338,7 @@ impl<T: PolygonScalar + Copy> TriangularNetwork<T> {
         None
     }
 
-    pub fn cut(&self, v_from: VertIdx, v_to: VertIdx) -> CutResult {
+    pub fn cut(&self, v_from: VertIdx, v_to: VertIdx) -> Cut {
         use Orientation::*;
 
         let mut cuts = vec![];
@@ -421,7 +429,7 @@ impl<T: PolygonScalar + Copy> TriangularNetwork<T> {
             }
         }
 
-        CutResult {
+        Cut {
             from: v_from,
             to: v_to,
             cut_triangles,
@@ -510,7 +518,7 @@ impl<T: PolygonScalar + Copy> TriangularNetwork<T> {
         Some(idx_self)
     }
 
-    fn cut_apply_prepare(&mut self, res: &CutResult) -> Vec<CutEdge> {
+    fn cut_apply_prepare(&mut self, res: &Cut) -> Vec<CutEdge> {
         let first = res.contour_cw[0];
         let mut verts = vec![CutEdge {
             inner: first,
@@ -535,7 +543,11 @@ impl<T: PolygonScalar + Copy> TriangularNetwork<T> {
         verts
     }
 
-    pub fn cut_apply(&mut self, res: &CutResult) -> Result<Vec<(VertIdx, VertIdx)>> {
+    pub unsafe fn cut_apply(&mut self, res: &Cut) -> Result<Vec<(VertIdx, VertIdx)>> {
+        self.cut_apply_inner(res)
+    }
+
+    fn cut_apply_inner(&mut self, res: &Cut) -> Result<Vec<(VertIdx, VertIdx)>> {
         if res.cut_triangles.len() == 0 {
             return Ok(vec![]);
         }
@@ -605,9 +617,10 @@ impl<T: PolygonScalar + Copy> TriangularNetwork<T> {
         Ok(out)
     }
 
+    /// Constraint an edge between two vertices
     pub fn constrain_edge(&mut self, v_from: VertIdx, v_to: VertIdx) -> Result<()> {
         let cut = self.cut(v_from, v_to);
-        self.cut_apply(&cut)?;
+        self.cut_apply_inner(&cut)?;
         Ok(())
     }
 
@@ -749,12 +762,10 @@ impl<T: PolygonScalar + Copy> TriangularNetwork<T> {
 
         let should_swap = if v0.is_super() || v2.is_super() {
             true
+        } else if v1.is_super() || v3.is_super() {
+            false
         } else {
-            if v1.is_super() || v3.is_super() {
-                false
-            } else {
-                inside_circle(p0, p1, p2, p3)
-            }
+            inside_circle(p0, p1, p2, p3)
         };
 
         if !should_swap {
@@ -815,6 +826,8 @@ impl<T: PolygonScalar + Copy> TriangularNetwork<T> {
         Ok(true)
     }
 
+    /// Add a new point to the network. Returns existing `VertIdx` of the point is already in the
+    /// network.
     pub fn insert(&mut self, p: &Point<T>, reductions: &mut usize) -> Result<VertIdx> {
         use TriangularNetworkLocation::*;
 
@@ -1179,12 +1192,12 @@ struct VisibilityQuery<T> {
     cw: VertIdx,
 }
 
+/// Triangle representation
 #[derive(Clone)]
 pub struct Triangle {
-    // counterclockwise
+    /// list of vertex indices, in counterclockwise order
     pub vertices: [VertIdx; 3],
-    //  - self, neighbors[0], neighbors[1] meets at vertices[0], counterclockwise
-    //  - vertices[0], vertices[1] meets with neighbors[1], ...
+    /// list of neighbor triangle indices, in counterclockwise order
     pub neighbors: [Option<TriIdx>; 3],
 }
 

@@ -53,7 +53,7 @@ pub struct DemoDelaunay {
     points: Vec<Point<f64>>,
 
     net: TriangularNetwork<f64>,
-    cut: Option<CutResult>,
+    cut: Option<Cut>,
 }
 
 impl DemoDelaunay {
@@ -153,7 +153,7 @@ impl Demo for DemoDelaunay {
                 break v;
             };
 
-            if let Err(e) = self.net.cut_apply(&cut) {
+            if let Err(e) = unsafe { self.net.cut_apply(&cut) } {
                 eprintln!("cut_apply: {:?}", e);
             }
             self.cut = Some(cut);
