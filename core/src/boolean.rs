@@ -148,7 +148,12 @@ impl<T: PolygonScalar + Copy + TotalOrd> SimplicalChain<T> {
         return (sx0_subdivide, ec_sx0, sx1_subdivide, ec_sx1);
     }
 
-    pub fn bool_intersect(&self, other: &SimplicalChain<T>) -> SimplicalChain<T> {
+    pub fn run(
+        &self,
+        other: &SimplicalChain<T>,
+        include_sx0: bool,
+        include_sx1: bool,
+    ) -> SimplicalChain<T> {
         let sx0 = self;
         let sx1 = other;
 
@@ -158,13 +163,13 @@ impl<T: PolygonScalar + Copy + TotalOrd> SimplicalChain<T> {
         let mut simplices = Vec::new();
 
         for (idx, s) in sx0_subdivide.simplices.into_iter().enumerate() {
-            if ec_sx0[idx] == 1.0 {
+            if (ec_sx0[idx] == 1.0) ^ include_sx0 {
                 simplices.push(s);
             }
         }
 
         for (idx, s) in sx1_subdivide.simplices.into_iter().enumerate() {
-            if ec_sx1[idx] == 1.0 {
+            if (ec_sx1[idx] == 1.0) ^ include_sx1 {
                 simplices.push(s);
             }
         }
@@ -172,27 +177,16 @@ impl<T: PolygonScalar + Copy + TotalOrd> SimplicalChain<T> {
         SimplicalChain { simplices }
     }
 
-    pub fn bool_union(&self, other: &SimplicalChain<T>) -> SimplicalChain<T> {
-        let sx0 = self;
-        let sx1 = other;
+    pub fn intersect(&self, other: &SimplicalChain<T>) -> SimplicalChain<T> {
+        self.run(other, false, false)
+    }
 
-        // subdivide, simplical chain
-        let (sx0_subdivide, ec_sx0, sx1_subdivide, ec_sx1) = sx0.subdivide_chracteristics(sx1);
+    pub fn union(&self, other: &SimplicalChain<T>) -> SimplicalChain<T> {
+        self.run(other, true, true)
+    }
 
-        let mut simplices = Vec::new();
-
-        for (idx, s) in sx0_subdivide.simplices.into_iter().enumerate() {
-            if ec_sx0[idx] != 1.0 {
-                simplices.push(s);
-            }
-        }
-        for (idx, s) in sx1_subdivide.simplices.into_iter().enumerate() {
-            if ec_sx1[idx] != 1.0 {
-                simplices.push(s);
-            }
-        }
-
-        SimplicalChain { simplices }
+    pub fn subtract(&self, other: &SimplicalChain<T>) -> SimplicalChain<T> {
+        self.run(other, true, false)
     }
 }
 

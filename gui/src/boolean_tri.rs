@@ -10,7 +10,7 @@ fn rect_union(rects: &[Rect]) -> SimplicalChain<f64> {
     for r in rects {
         let p = r.polygon();
         let sx_r = SimplicalChain::from_polygon(&p);
-        sx = sx.bool_union(&sx_r);
+        sx = sx.union(&sx_r);
     }
     sx
 }

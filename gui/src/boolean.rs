@@ -4,12 +4,19 @@ use core::{gen_rects, points_circular, Rect};
 use eframe::egui::{self, epaint::Color32, plot::*, Ui};
 use rgeometry::data::{Point, Polygon};
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum CircleMode {
+    Disabled,
+    Union,
+    Intersect,
+    Subtract,
+}
+
 pub struct DemoBoolean {
     opt_render_rect: bool,
     opt_render_union: bool,
 
-    opt_circle: bool,
-    opt_circle_intersect: bool,
+    opt_circle_mode: CircleMode,
 
     circle: Vec<Point<f64>>,
 
@@ -24,7 +31,7 @@ fn rect_union(rects: &[Rect]) -> SimplicalChain<f64> {
     for r in rects {
         let p = r.polygon();
         let sx_r = SimplicalChain::from_polygon(&p);
-        sx = sx.bool_union(&sx_r);
+        sx = sx.union(&sx_r);
     }
     sx
 }
@@ -40,8 +47,8 @@ impl DemoBoolean {
             opt_render_rect: true,
             opt_render_union: true,
 
-            opt_circle: false,
-            opt_circle_intersect: false,
+            opt_circle_mode: CircleMode::Disabled,
+
             circle: points_circular(view / 2.0, 32),
 
             view,
@@ -64,9 +71,16 @@ impl Demo for DemoBoolean {
                 self.rects = gen_rects(&mut rng, self.view, 100);
             }
             ui.separator();
-            ui.checkbox(&mut self.opt_circle, "circle?");
-            ui.separator();
-            ui.checkbox(&mut self.opt_circle_intersect, "circle intersect?");
+
+            for (mode, label) in &[
+                (CircleMode::Disabled, "none"),
+                (CircleMode::Union, "union"),
+                (CircleMode::Intersect, "intersect"),
+                (CircleMode::Subtract, "subtract"),
+            ] {
+                ui.radio_value(&mut self.opt_circle_mode, *mode, *label);
+            }
+
             ui.separator();
             ui.checkbox(&mut self.opt_render_rect, "render rect");
             ui.separator();
@@ -78,15 +92,24 @@ impl Demo for DemoBoolean {
         }
         self.sx = rect_union(&self.rects);
 
-        if self.opt_circle {
-            let p = Polygon::new(self.circle.clone()).unwrap();
-            let sx_circle = SimplicalChain::from_polygon(&p);
+        if self.opt_circle_mode == CircleMode::Disabled {
+            return;
+        }
 
-            if self.opt_circle_intersect {
-                self.sx = self.sx.bool_intersect(&sx_circle);
-            } else {
-                self.sx = self.sx.bool_union(&sx_circle);
+        let p = Polygon::new(self.circle.clone()).unwrap();
+        let sx_circle = SimplicalChain::from_polygon(&p);
+
+        match self.opt_circle_mode {
+            CircleMode::Union => {
+                self.sx = self.sx.union(&sx_circle);
             }
+            CircleMode::Intersect => {
+                self.sx = self.sx.intersect(&sx_circle);
+            }
+            CircleMode::Subtract => {
+                self.sx = self.sx.subtract(&sx_circle);
+            }
+            _ => (),
         }
     }
 

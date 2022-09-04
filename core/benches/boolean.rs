@@ -21,7 +21,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
 
         c.bench_function(
             &format!("SimplicalChain::bool_intersect {subdivide}"),
-            |b| b.iter(|| s0.bool_intersect(&s1)),
+            |b| b.iter(|| s0.intersect(&s1)),
         );
     }
 
@@ -35,7 +35,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         for r in rects {
             let p = r.polygon();
             let sx_r = SimplicalChain::from_polygon(&p);
-            sx = sx.bool_union(&sx_r);
+            sx = sx.union(&sx_r);
         }
 
         c.bench_function("build_net", |b| b.iter(|| build_net(view, &sx, true)));

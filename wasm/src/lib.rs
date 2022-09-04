@@ -53,14 +53,14 @@ impl Simplical {
     #[wasm_bindgen]
     pub fn union(&self, other: &Simplical) -> Self {
         Self {
-            sx: self.sx.bool_union(&other.sx),
+            sx: self.sx.union(&other.sx),
         }
     }
 
     #[wasm_bindgen]
     pub fn intersect(&self, other: &Simplical) -> Self {
         Self {
-            sx: self.sx.bool_intersect(&other.sx),
+            sx: self.sx.intersect(&other.sx),
         }
     }
 }
