@@ -1065,8 +1065,7 @@ impl<T: PolygonScalar + Copy> TriangularNetwork<T> {
 
         let mut out = Vec::new();
         for q in queries {
-            let count = self.visibility_tri(sx, q, &mut out);
-            eprintln!("count={:?}", count);
+            self.visibility_tri(sx, q, &mut out);
         }
 
         let mut segments = out
