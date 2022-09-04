@@ -1,10 +1,10 @@
+use core::{
+    boolean::SimplicalChain, build_net, gen_rects, points_cube_subdivide, raster::raster, Rect,
+};
 use criterion::{criterion_group, criterion_main, Criterion};
 use rand::prelude::*;
 use rand_chacha::ChaCha20Rng;
 use rgeometry::data::*;
-use rgeometry_playground::boolean::SimplicalChain;
-use rgeometry_playground::demo::*;
-use rgeometry_playground::raster::raster;
 
 pub fn criterion_benchmark(c: &mut Criterion) {
     let seed: <ChaCha20Rng as SeedableRng>::Seed = Default::default();

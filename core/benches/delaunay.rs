@@ -1,9 +1,11 @@
+use core::{
+    delaunay::{TriIdx, TriangularNetwork, VertIdx},
+    points_grid, points_uniform,
+};
 use criterion::{criterion_group, criterion_main, Criterion};
 use rand::prelude::*;
 use rand_chacha::ChaCha20Rng;
 use rgeometry::data::*;
-use rgeometry_playground::delaunay::{TriIdx, TriangularNetwork, VertIdx};
-use rgeometry_playground::demo::{points_grid, points_uniform};
 
 fn rand_point<R: Rng>(rng: &mut R) -> Point<f64> {
     Point::new([rng.gen_range(-100.0..100.0), rng.gen_range(-100.0..100.0)])

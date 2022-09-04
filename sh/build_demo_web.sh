@@ -3,7 +3,7 @@ set -eu
 script_path=$( cd "$(dirname "${BASH_SOURCE[0]}")" ; pwd -P )
 cd "$script_path/.."
 
-CRATE_NAME="rgeometry_playground"
+CRATE_NAME="gui"
 
 OPEN=false
 OPTIMIZE=false
@@ -51,6 +51,7 @@ echo "Building rust…"
 BUILD=release
 
 (cargo build \
+    -p gui \
     --release \
     --lib \
     --target wasm32-unknown-unknown

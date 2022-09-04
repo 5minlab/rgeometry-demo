@@ -1,10 +1,10 @@
 #[cfg(test)]
 mod tests {
+    use core::boolean::SimplicalChain;
+    use core::*;
     use rand::prelude::*;
     use rand_chacha::*;
     use rgeometry::data::Point;
-    use rgeometry_playground::boolean::SimplicalChain;
-    use rgeometry_playground::demo::*;
 
     #[test]
     fn crash() {

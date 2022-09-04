@@ -1,5 +1,5 @@
-use super::{plot_line, plot_net, points_grid, points_uniform, pt_egui, Demo};
-use crate::delaunay::*;
+use super::{plot_line, plot_net, pt_egui, Demo};
+use core::{delaunay::*, points_grid, points_uniform};
 use eframe::egui::{
     self,
     epaint::Color32,

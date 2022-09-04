@@ -1,4 +1,5 @@
-use super::{gen_rects, p_rg_to_egui, plot_line, pt_egui, Demo, Rect};
+use super::{p_rg_to_egui, plot_line, pt_egui, Demo};
+use core::{gen_rects, Rect};
 use eframe::egui::{
     self,
     epaint::Color32,

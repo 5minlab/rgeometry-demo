@@ -1,8 +1,8 @@
+use core::raster::raster;
 use criterion::{criterion_group, criterion_main, Criterion};
 use rand::prelude::*;
 use rand_chacha::ChaCha20Rng;
 use rgeometry::data::*;
-use rgeometry_playground::raster::raster;
 
 fn rand_point<R: Rng>(rng: &mut R) -> Point<f64> {
     Point::new([rng.gen_range(-100.0..100.0), rng.gen_range(-100.0..100.0)])

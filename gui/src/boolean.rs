@@ -1,5 +1,6 @@
-use super::{gen_rects, p_rg_to_egui, plot_line, points_circular, Demo, Rect};
-use crate::boolean::*;
+use super::{p_rg_to_egui, plot_line, Demo};
+use core::boolean::*;
+use core::{gen_rects, points_circular, Rect};
 use eframe::egui::{self, epaint::Color32, plot::*, Ui};
 use rgeometry::data::{Point, Polygon};
 

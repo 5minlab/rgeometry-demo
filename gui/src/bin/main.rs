@@ -10,6 +10,6 @@ fn main() {
     eframe::run_native(
         "rgeometry playground",
         options,
-        Box::new(|_cc| Box::new(rgeometry_playground::MyApp::default())),
+        Box::new(|_cc| Box::new(gui::MyApp::default())),
     );
 }

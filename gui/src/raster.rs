@@ -1,6 +1,6 @@
-use crate::raster::raster;
+use core::{points_tri, raster::raster};
 
-use super::{plot_line, points_tri, Demo};
+use super::{plot_line, Demo};
 use eframe::egui::{
     self,
     epaint::Color32,

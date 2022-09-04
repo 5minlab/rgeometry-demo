@@ -1,6 +1,7 @@
-use super::{gen_rects, p_rg_to_egui, plot_line, Demo, Rect};
-use crate::boolean::*;
-use crate::demo::{build_net, TriIdx, TriangularNetwork, VertIdx};
+use super::{p_rg_to_egui, plot_line, Demo};
+use core::boolean::*;
+use core::delaunay::{TriIdx, TriangularNetwork, VertIdx};
+use core::{build_net, gen_rects, Rect};
 use eframe::egui::{self, epaint::Color32, plot::*, Ui};
 use rgeometry::data::Point;
 
@@ -123,12 +124,9 @@ impl Demo for DemoBooleanTri {
         self.net = net;
         self.constraints = c;
 
-        let start = std::time::Instant::now();
         self.vis = self
             .net
             .visibility(&self.constraints, &Point::new([0.0, 0.0]));
-        let dt = std::time::Instant::now() - start;
-        eprintln!("vis took: {:?}", dt);
     }
 
     fn plot_ui(&self, plot_ui: &mut PlotUi) {

@@ -312,7 +312,7 @@ impl<T: PolygonScalar + Clone> Simplex<T> {
 
 #[cfg(test)]
 mod test {
-    use crate::demo::points_cube_subdivide;
+    use crate::points_cube_subdivide;
 
     use super::*;
 

@@ -309,6 +309,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "core"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "criterion",
+ "rand",
+ "rand_chacha",
+ "rgeometry",
+]
+
+[[package]]
 name = "core-foundation"
 version = "0.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -890,6 +901,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3da5951a1569dbab865c6f2a863efafff193a93caf05538d193e9e3816d21696"
 dependencies = [
  "gl_generator",
+]
+
+[[package]]
+name = "gui"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "console_error_panic_hook",
+ "core",
+ "criterion",
+ "eframe",
+ "rand",
+ "rand_chacha",
+ "rgeometry",
+ "tracing-subscriber",
+ "tracing-wasm",
 ]
 
 [[package]]
@@ -1641,21 +1668,6 @@ dependencies = [
  "num-traits",
  "ordered-float",
  "rand",
-]
-
-[[package]]
-name = "rgeometry-playground"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "console_error_panic_hook",
- "criterion",
- "eframe",
- "rand",
- "rand_chacha",
- "rgeometry",
- "tracing-subscriber",
- "tracing-wasm",
 ]
 
 [[package]]

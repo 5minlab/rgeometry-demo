@@ -1,0 +1,26 @@
+[package]
+name = "core"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0.62"
+criterion = "0.3.6"
+rand = "0.8.5"
+rgeometry = { path = "../../rgeometry" }
+
+[dev-dependencies]
+rand_chacha = "0.3.1"
+
+[[bench]]
+name = "benchmark"
+harness = false
+
+[[bench]]
+name = "boolean"
+harness = false
+
+[[bench]]
+name = "delaunay"
+harness = false
+
