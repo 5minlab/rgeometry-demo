@@ -3,7 +3,7 @@
 use rgeometry::{data::*, Intersects, Orientation, PolygonScalar, TotalOrd};
 use std::cmp::Ordering;
 
-#[derive(Default, Debug, PartialEq)]
+#[derive(Clone, Default, Debug, PartialEq)]
 pub struct SimplicalChain<T: PolygonScalar> {
     pub simplices: Vec<Simplex<T>>,
 }

@@ -9,7 +9,8 @@ enum CircleMode {
     Disabled,
     Union,
     Intersect,
-    Subtract,
+    Subtract0,
+    Subtract1,
 }
 
 pub struct DemoBoolean {
@@ -76,7 +77,8 @@ impl Demo for DemoBoolean {
                 (CircleMode::Disabled, "none"),
                 (CircleMode::Union, "union"),
                 (CircleMode::Intersect, "intersect"),
-                (CircleMode::Subtract, "subtract"),
+                (CircleMode::Subtract0, "subtract0"),
+                (CircleMode::Subtract1, "subtract1"),
             ] {
                 ui.radio_value(&mut self.opt_circle_mode, *mode, *label);
             }
@@ -106,8 +108,11 @@ impl Demo for DemoBoolean {
             CircleMode::Intersect => {
                 self.sx = self.sx.intersect(&sx_circle);
             }
-            CircleMode::Subtract => {
+            CircleMode::Subtract0 => {
                 self.sx = self.sx.subtract(&sx_circle);
+            }
+            CircleMode::Subtract1 => {
+                self.sx = sx_circle.subtract(&self.sx);
             }
             _ => (),
         }
