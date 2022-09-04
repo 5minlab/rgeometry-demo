@@ -11,6 +11,7 @@ use rgeometry::data::Point;
 
 pub struct DemoRaster {
     view: f64,
+    grid_size: usize,
 
     verts: [Point<f64>; 3],
 }
@@ -21,6 +22,7 @@ impl DemoRaster {
         let mut rng = rand::thread_rng();
         Self {
             view,
+            grid_size: 5,
             verts: points_tri(&mut rng, view),
         }
     }
@@ -41,6 +43,13 @@ impl Demo for DemoRaster {
             if ui.button("regenerate").clicked() {
                 regen = true;
             }
+            ui.separator();
+            ui.label("grid size");
+            for size in [1, 5, 10, 20] {
+                if ui.button(&format!("{size}")).clicked() {
+                    self.grid_size = size;
+                }
+            }
         });
 
         if regen {
@@ -52,12 +61,14 @@ impl Demo for DemoRaster {
     fn plot_ui(&self, plot_ui: &mut plot::PlotUi) {
         let [ref p0, ref p1, ref p2] = self.verts;
         plot_line(plot_ui, &[p0, p1, p2, p0], Color32::RED);
-        raster(&self.verts, |x, y| {
+        raster(self.grid_size, &self.verts, |x, y| {
+            let m = self.grid_size as f64;
+            let h = self.grid_size as f64 / 2.0;
             let p = Polygon::new(PlotPoints::Owned(vec![
-                PlotPoint::new(x - 0.5, y - 0.5),
-                PlotPoint::new(x - 0.5, y + 0.5),
-                PlotPoint::new(x + 0.5, y + 0.5),
-                PlotPoint::new(x + 0.5, y - 0.5),
+                PlotPoint::new(m * x - h, m * y - h),
+                PlotPoint::new(m * x - h, m * y + h),
+                PlotPoint::new(m * x + h, m * y + h),
+                PlotPoint::new(m * x + h, m * y - h),
             ]))
             .color(Color32::WHITE);
             plot_ui.polygon(p);

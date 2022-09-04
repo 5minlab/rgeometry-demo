@@ -52,7 +52,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
             b.iter(|| {
                 let mut sum = 0.0;
                 for (p1, p2) in &vis {
-                    raster(&[p0, *p1, *p2], |x, y| {
+                    raster(1, &[p0, *p1, *p2], |x, y| {
                         sum += x + y;
                     });
                 }

@@ -1,7 +1,22 @@
 use crate::delaunay::SubIdx;
 use rgeometry::data::Point;
 
-pub fn raster<F>(verts: &[Point<f64>; 3], mut f: F)
+pub fn raster<F>(grid_size: usize, verts: &[Point<f64>; 3], f: F)
+where
+    F: FnMut(f64, f64),
+{
+    let grid_size = grid_size as f64;
+    raster_unit(
+        &[
+            Point::new([verts[0].array[0] / grid_size, verts[0].array[1] / grid_size]),
+            Point::new([verts[1].array[0] / grid_size, verts[1].array[1] / grid_size]),
+            Point::new([verts[2].array[0] / grid_size, verts[2].array[1] / grid_size]),
+        ],
+        f,
+    )
+}
+
+pub fn raster_unit<F>(verts: &[Point<f64>; 3], mut f: F)
 where
     F: FnMut(f64, f64),
 {

@@ -36,7 +36,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         c.bench_function(&format!("raster {size}"), |b| {
             b.iter(|| {
                 let mut sum = 0.0;
-                raster(&[p0, p1, p2], |x, y| {
+                raster(1, &[p0, p1, p2], |x, y| {
                     sum += x + y;
                 });
             });
