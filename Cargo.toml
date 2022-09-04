@@ -1,5 +1,5 @@
 [workspace]
-members = ["core", "gui"]
+members = ["core", "gui", "wasm"]
 
 [profile.release]
 debug = true
