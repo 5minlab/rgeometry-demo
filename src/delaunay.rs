@@ -1,8 +1,6 @@
 // https://www.personal.psu.edu/cxc11/AERSP560/DELAUNEY/13_Two_algorithms_Delauney.pdf
 use rgeometry::{data::*, Orientation, PolygonScalar};
 
-use crate::boolean::SimplicalChain;
-
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub struct TriIdx(pub usize);
 impl std::fmt::Debug for TriIdx {
@@ -81,45 +79,6 @@ pub enum TriangularNetworkLocation {
     Outside(Edge),
 }
 
-fn det2<T>(v: [T; 4]) -> T
-where
-    T: PolygonScalar,
-{
-    let [a, b, c, d] = v;
-    a * d - b * c
-}
-
-fn det3<T>(v: [T; 9]) -> T
-where
-    T: PolygonScalar + Copy,
-{
-    let [a, b, c, d, e, f, g, h, i] = v;
-    a * det2([e, f, h, i]) - b * det2([d, f, g, i]) + c * det2([d, e, g, h])
-}
-
-fn inside_circle<T>(a: &Point<T>, b: &Point<T>, c: &Point<T>, d: &Point<T>) -> bool
-where
-    T: PolygonScalar + Copy,
-{
-    let [ax, ay] = a.array;
-    let [bx, by] = b.array;
-    let [cx, cy] = c.array;
-    let [dx, dy] = d.array;
-
-    let d = det3([
-        ax - dx,
-        ay - dy,
-        ax * ax - dx * dx + ay * ay - dy * dy,
-        bx - dx,
-        by - dy,
-        bx * bx - dx * dx + by * by - dy * dy,
-        cx - dx,
-        cy - dy,
-        cx * cx - dx * dx + cy * cy - dy * dy,
-    ]);
-    d > T::from_constant(0)
-}
-
 #[derive(Debug)]
 struct CutEdge {
     inner: Edge,
@@ -140,17 +99,17 @@ enum CutIter {
 
 fn pt_mean<T>(points: &[&Point<T>]) -> Point<T>
 where
-    T: PolygonScalar + Copy,
+    T: PolygonScalar,
 {
     let mut x = T::from_constant(0);
     let mut y = T::from_constant(0);
     for p in points {
-        x += p.array[0];
-        y += p.array[1];
+        x += p.array[0].clone();
+        y += p.array[1].clone();
     }
     // TODO
     let l = T::from_constant(points.len() as i8);
-    Point::new([x / l, y / l])
+    Point::new([x / l.clone(), y / l.clone()])
 }
 
 #[derive(Debug, Clone)]
@@ -159,7 +118,7 @@ pub struct TriangularNetwork<T> {
     pub triangles: Vec<Triangle>,
 }
 
-impl<T: PolygonScalar + Copy> TriangularNetwork<T> {
+impl<T: PolygonScalar> TriangularNetwork<T> {
     /// Create new triangluar network.
     pub fn new(p0: Point<T>, p1: Point<T>, p2: Point<T>) -> Self {
         let (p1, p2) = match Point::orient_along_direction(&p0, Direction::Through(&p1), &p2) {
@@ -482,7 +441,7 @@ impl<T: PolygonScalar + Copy> TriangularNetwork<T> {
             let cur = self.vert(slice[i_mid].vert);
             let next = self.vert(slice[i].vert);
 
-            if inside_circle(p_start, cur, p_end, next) {
+            if T::inside_circle(p_start, cur, p_end, next) {
                 i_mid = i;
             }
         }
@@ -765,7 +724,7 @@ impl<T: PolygonScalar + Copy> TriangularNetwork<T> {
         } else if v1.is_super() || v3.is_super() {
             false
         } else {
-            inside_circle(p0, p1, p2, p3)
+            T::inside_circle(p0, p1, p2, p3)
         };
 
         if !should_swap {
@@ -838,7 +797,7 @@ impl<T: PolygonScalar + Copy> TriangularNetwork<T> {
 
         match self.locate_recursive(p) {
             InTriangle(idx_t) => {
-                let idx_v = self.add_vert(*p);
+                let idx_v = self.add_vert(p.clone());
                 let t = self.tri(idx_t).clone();
 
                 let idx_t0 = idx_t;
@@ -900,7 +859,7 @@ impl<T: PolygonScalar + Copy> TriangularNetwork<T> {
                 let v0 = t0.vert(idx_neighbor);
                 let v1 = t0.vert(idx_neighbor.ccw());
                 let v2 = t0.vert(idx_neighbor.cw());
-                let idx_v = self.add_vert(*p);
+                let idx_v = self.add_vert(p.clone());
 
                 //       v2(v0)
                 //     t3     t2
@@ -1033,7 +992,11 @@ impl<T: PolygonScalar + Copy> TriangularNetwork<T> {
     }
 
     // https://arxiv.org/abs/1403.3905
-    pub fn visibility(&self, sx: &SimplicalChain<T>, p: &Point<T>) -> Vec<(Point<T>, Point<T>)> {
+    pub fn visibility(
+        &self,
+        edges: &[(VertIdx, VertIdx)],
+        p: &Point<T>,
+    ) -> Vec<(Point<T>, Point<T>)> {
         use TriangularNetworkLocation::*;
 
         if let Err(e) = self.check_invariant("visibility") {
@@ -1065,7 +1028,7 @@ impl<T: PolygonScalar + Copy> TriangularNetwork<T> {
 
         let mut out = Vec::new();
         for q in queries {
-            self.visibility_tri(sx, q, &mut out);
+            self.visibility_tri(edges, q, &mut out);
         }
 
         out.into_iter()
@@ -1100,7 +1063,7 @@ impl<T: PolygonScalar + Copy> TriangularNetwork<T> {
 
     fn visibility_tri(
         &self,
-        sx: &SimplicalChain<T>,
+        edges: &[(VertIdx, VertIdx)],
         q: VisibilityQuery<T>,
         out: &mut Vec<VisibilitySegment>,
     ) -> usize {
@@ -1113,9 +1076,11 @@ impl<T: PolygonScalar + Copy> TriangularNetwork<T> {
         let p_ccw = self.vert(q.ccw);
 
         let t = self.tri(e.tri);
-        let center = self.centroid(e.tri);
 
-        if sx.characteristic(&center) != 1.0 {
+        if edges
+            .binary_search(&(self.edge_to(&e), self.edge_from(&e)))
+            .is_ok()
+        {
             out.push(VisibilitySegment {
                 edge: e,
                 ccw: q.ccw,
@@ -1141,7 +1106,7 @@ impl<T: PolygonScalar + Copy> TriangularNetwork<T> {
             let e = Edge::new(e.tri, e.sub.ccw());
             if let Some(duel) = self.edge_duel(&e) {
                 count += self.visibility_tri(
-                    sx,
+                    edges,
                     VisibilityQuery {
                         src: q.src.clone(),
                         edge: duel,
@@ -1165,7 +1130,7 @@ impl<T: PolygonScalar + Copy> TriangularNetwork<T> {
             let e = Edge::new(e.tri, e.sub.cw());
             if let Some(duel) = self.edge_duel(&e) {
                 count += self.visibility_tri(
-                    sx,
+                    edges,
                     VisibilityQuery {
                         src: q.src.clone(),
                         edge: duel,

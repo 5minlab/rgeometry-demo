@@ -1,6 +1,6 @@
 use crate::boolean::SimplicalChain;
 
-use crate::delaunay::{TriIdx, TriangularNetwork};
+use crate::delaunay::{TriIdx, TriangularNetwork, VertIdx};
 use rand::Rng;
 use rgeometry::{data::Direction, Orientation};
 
@@ -235,7 +235,11 @@ pub fn gen_rects<R: Rng>(rng: &mut R, view: f64, count: usize) -> Vec<Rect> {
     rects
 }
 
-pub fn build_net(view: f64, sx: &SimplicalChain<f64>, cut: bool) -> TriangularNetwork<f64> {
+pub fn build_net(
+    view: f64,
+    sx: &SimplicalChain<f64>,
+    cut: bool,
+) -> (TriangularNetwork<f64>, Vec<(VertIdx, VertIdx)>) {
     use std::collections::*;
 
     let v = view * 4.0;
@@ -254,12 +258,13 @@ pub fn build_net(view: f64, sx: &SimplicalChain<f64>, cut: bool) -> TriangularNe
             }
             Err(e) => {
                 eprintln!("TriangularNetwork::insert: {:?}", e);
-                return net;
+                return (net, vec![]);
             }
         }
     }
 
-    if cut {
+    let constraints = if cut {
+        let mut constraints = Vec::with_capacity(sx.simplices.len());
         for s in &sx.simplices {
             let idx0 = h.get(&s.src).unwrap();
             let idx1 = h.get(&s.dst).unwrap();
@@ -268,10 +273,15 @@ pub fn build_net(view: f64, sx: &SimplicalChain<f64>, cut: bool) -> TriangularNe
                 eprintln!("failed to cut: cut={:?}, e={:?}", cut, e);
                 break;
             }
+            constraints.push((*idx0, *idx1));
         }
-    }
+        constraints.sort();
+        constraints
+    } else {
+        vec![]
+    };
 
-    net
+    (net, constraints)
 }
 
 trait Demo {

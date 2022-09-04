@@ -1,6 +1,6 @@
 use super::{gen_rects, p_rg_to_egui, plot_line, Demo, Rect};
 use crate::boolean::*;
-use crate::demo::{build_net, TriIdx, TriangularNetwork};
+use crate::demo::{build_net, TriIdx, TriangularNetwork, VertIdx};
 use eframe::egui::{self, epaint::Color32, plot::*, Ui};
 use rgeometry::data::Point;
 
@@ -48,6 +48,7 @@ pub struct DemoBooleanTri {
     rects: Vec<Rect>,
     sx: SimplicalChain<f64>,
     net: TriangularNetwork<f64>,
+    constraints: Vec<(VertIdx, VertIdx)>,
     vis: Vec<(Point<f64>, Point<f64>)>,
 }
 
@@ -59,7 +60,7 @@ impl DemoBooleanTri {
         let rects = gen_rects(&mut rng, view, 100);
         let sx = rect_union(&rects);
         let opt_cut = true;
-        let net = build_net(view, &sx, opt_cut);
+        let (net, constraints) = build_net(view, &sx, opt_cut);
 
         Self {
             opt_render_rect: false,
@@ -74,6 +75,7 @@ impl DemoBooleanTri {
             rects,
             sx,
             net,
+            constraints,
 
             vis: Vec::new(),
         }
@@ -117,9 +119,16 @@ impl Demo for DemoBooleanTri {
         }
 
         self.sx = rect_union(&self.rects);
-        self.net = build_net(self.view, &self.sx, self.opt_cut);
+        let (net, c) = build_net(self.view, &self.sx, self.opt_cut);
+        self.net = net;
+        self.constraints = c;
 
-        self.vis = self.net.visibility(&self.sx, &Point::new([0.0, 0.0]));
+        let start = std::time::Instant::now();
+        self.vis = self
+            .net
+            .visibility(&self.constraints, &Point::new([0.0, 0.0]));
+        let dt = std::time::Instant::now() - start;
+        eprintln!("vis took: {:?}", dt);
     }
 
     fn plot_ui(&self, plot_ui: &mut PlotUi) {
