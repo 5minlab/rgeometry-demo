@@ -19,7 +19,7 @@ mod boolean_tri;
 mod cdt;
 mod delaunay;
 mod gridnet;
-mod rester;
+mod raster;
 
 pub fn plot_line(plot_ui: &mut PlotUi, points: &[&Point<f64>], color: Color32) {
     let e_points = points.iter().map(|p| pt_egui(p)).collect();

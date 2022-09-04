@@ -1,7 +1,7 @@
 use crate::delaunay::SubIdx;
 use rgeometry::data::Point;
 
-pub fn rester<F>(verts: &[Point<f64>; 3], mut f: F)
+pub fn raster<F>(verts: &[Point<f64>; 3], mut f: F)
 where
     F: FnMut(f64, f64),
 {

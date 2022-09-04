@@ -1,4 +1,4 @@
-use crate::rester::rester;
+use crate::raster::raster;
 
 use super::{plot_line, points_tri, Demo};
 use eframe::egui::{
@@ -9,13 +9,13 @@ use eframe::egui::{
 };
 use rgeometry::data::Point;
 
-pub struct DemoRester {
+pub struct DemoRaster {
     view: f64,
 
     verts: [Point<f64>; 3],
 }
 
-impl DemoRester {
+impl DemoRaster {
     #[allow(unused)]
     pub fn new(view: f64) -> Self {
         let mut rng = rand::thread_rng();
@@ -26,9 +26,9 @@ impl DemoRester {
     }
 }
 
-impl Demo for DemoRester {
+impl Demo for DemoRaster {
     fn name(&self) -> &'static str {
-        "Rester"
+        "Raster"
     }
 
     fn ui(&mut self, _t: f64, ctx: &egui::Context, ui: &mut Ui) {
@@ -52,7 +52,7 @@ impl Demo for DemoRester {
     fn plot_ui(&self, plot_ui: &mut plot::PlotUi) {
         let [ref p0, ref p1, ref p2] = self.verts;
         plot_line(plot_ui, &[p0, p1, p2, p0], Color32::RED);
-        rester(&self.verts, |x, y| {
+        raster(&self.verts, |x, y| {
             let p = Polygon::new(PlotPoints::Owned(vec![
                 PlotPoint::new(x - 0.5, y - 0.5),
                 PlotPoint::new(x - 0.5, y + 0.5),
