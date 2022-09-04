@@ -188,6 +188,10 @@ impl<T: PolygonScalar + Copy> TriangularNetwork<T> {
         TriIdx(idx)
     }
 
+    pub fn find_vert(&self, p: &Point<T>) -> Option<VertIdx> {
+        self.vertices.iter().position(|v| v == p).map(VertIdx)
+    }
+
     pub fn vert(&self, idx: VertIdx) -> &Point<T> {
         &self.vertices[idx.0]
     }
@@ -567,6 +571,12 @@ impl<T: PolygonScalar + Copy> TriangularNetwork<T> {
         self.check_invariant("post-cut_resolve")?;
 
         Ok(out)
+    }
+
+    pub fn constrain_edge(&mut self, v_from: VertIdx, v_to: VertIdx) -> Result<()> {
+        let cut = self.cut(v_from, v_to);
+        self.cut_apply(&cut)?;
+        Ok(())
     }
 
     #[allow(unused)]
