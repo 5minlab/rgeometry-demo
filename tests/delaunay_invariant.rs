@@ -30,8 +30,8 @@ mod tests {
             sx = sx.bool_union(&sx_r);
         }
 
-        let net = build_net(view, &sx, true);
+        let (net, c) = build_net(view, &sx, true);
 
-        let _vis = net.visibility(&sx, &Point::new([0.0, 0.0]));
+        let _vis = net.visibility(&c, &Point::new([0.0, 0.0]));
     }
 }

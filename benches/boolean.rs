@@ -39,10 +39,10 @@ pub fn criterion_benchmark(c: &mut Criterion) {
 
         c.bench_function("build_net", |b| b.iter(|| build_net(view, &sx, true)));
 
-        let (net, c) = build_net(view, &sx, true);
+        let (net, constraints) = build_net(view, &sx, true);
 
         c.bench_function("TriangularNetwork::visibility", |b| {
-            b.iter(|| net.visibility(&sx, &Point::new([0.0, 0.0])))
+            b.iter(|| net.visibility(&constraints, &Point::new([0.0, 0.0])))
         });
 
         c.bench_function("SimplicalChain::characteristic", |b| {

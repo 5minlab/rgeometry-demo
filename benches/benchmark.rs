@@ -2,7 +2,7 @@ use criterion::{criterion_group, criterion_main, Criterion};
 use rand::prelude::*;
 use rand_chacha::ChaCha20Rng;
 use rgeometry::data::*;
-use rgeometry_playground::rester::rester;
+use rgeometry_playground::raster::raster;
 
 fn rand_point<R: Rng>(rng: &mut R) -> Point<f64> {
     Point::new([rng.gen_range(-100.0..100.0), rng.gen_range(-100.0..100.0)])
@@ -33,10 +33,10 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         let p1 = Point::new([size, -size]);
         let p2 = Point::new([0.0, size]);
 
-        c.bench_function(&format!("rester {size}"), |b| {
+        c.bench_function(&format!("raster {size}"), |b| {
             b.iter(|| {
                 let mut sum = 0.0;
-                rester(&[p0, p1, p2], |x, y| {
+                raster(&[p0, p1, p2], |x, y| {
                     sum += x + y;
                 });
             });

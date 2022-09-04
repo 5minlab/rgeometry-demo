@@ -67,7 +67,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         });
         let cut = net.cut(VertIdx(idx0), VertIdx(idx1));
         c.bench_function(&format!("TriangularNetwork::cut_apply {size}"), |b| {
-            b.iter(|| net.clone().cut_apply(&cut))
+            b.iter(|| unsafe { net.clone().cut_apply(&cut) })
         });
     }
 
