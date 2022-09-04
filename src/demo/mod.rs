@@ -310,7 +310,7 @@ impl Default for MyApp {
             Box::new(cdt::DemoCDT::new(view)),
             Box::new(delaunay::DemoDelaunay::new(view)),
             Box::new(gridnet::DemoGridNet::new(view)),
-            Box::new(raster::DemoRester::new(view)),
+            Box::new(raster::DemoRaster::new(view)),
         ];
         let selected = demos[0].name();
 
