@@ -1053,8 +1053,8 @@ impl<T: PolygonScalar + Copy> TriangularNetwork<T> {
                         queries.push(VisibilityQuery {
                             src: p.clone(),
                             edge: duel,
-                            cw,
                             ccw,
+                            cw,
                         });
                     }
                 }
@@ -1068,8 +1068,7 @@ impl<T: PolygonScalar + Copy> TriangularNetwork<T> {
             self.visibility_tri(sx, q, &mut out);
         }
 
-        let mut segments = out
-            .into_iter()
+        out.into_iter()
             .map(|s| {
                 let t = self.tri(s.edge.tri);
                 let p_start = self.vert(t.vert(s.edge.sub));
@@ -1085,10 +1084,7 @@ impl<T: PolygonScalar + Copy> TriangularNetwork<T> {
 
                 (p_cw, p_ccw)
             })
-            .collect::<Vec<_>>();
-
-        segments.sort_by(|a, b| p.ccw_cmp_around(&a.0, &b.0));
-        segments
+            .collect::<Vec<_>>()
     }
 
     pub fn centroid(&self, tri: TriIdx) -> Point<T> {
@@ -1133,6 +1129,30 @@ impl<T: PolygonScalar + Copy> TriangularNetwork<T> {
         let d_ccw_1 = Point::orient_along_direction(p, Direction::Through(p_ccw), self.vert(v1));
         let d_cw_1 = Point::orient_along_direction(p, Direction::Through(p_cw), self.vert(v1));
 
+        // cw side
+        if d_cw_1 != ClockWise {
+            let cw = q.cw;
+            let ccw = match d_ccw_1 {
+                CoLinear => v1,
+                CounterClockWise => q.ccw,
+                ClockWise => v1,
+            };
+
+            let e = Edge::new(e.tri, e.sub.ccw());
+            if let Some(duel) = self.edge_duel(&e) {
+                count += self.visibility_tri(
+                    sx,
+                    VisibilityQuery {
+                        src: q.src.clone(),
+                        edge: duel,
+                        ccw,
+                        cw,
+                    },
+                    out,
+                );
+            }
+        }
+
         // ccw side
         if d_ccw_1 != CounterClockWise {
             let ccw = q.ccw;
@@ -1157,29 +1177,6 @@ impl<T: PolygonScalar + Copy> TriangularNetwork<T> {
             }
         }
 
-        // cw side
-        if d_cw_1 != ClockWise {
-            let cw = q.cw;
-            let ccw = match d_ccw_1 {
-                CoLinear => v1,
-                CounterClockWise => q.ccw,
-                ClockWise => v1,
-            };
-
-            let e = Edge::new(e.tri, e.sub.ccw());
-            if let Some(duel) = self.edge_duel(&e) {
-                count += self.visibility_tri(
-                    sx,
-                    VisibilityQuery {
-                        src: q.src.clone(),
-                        edge: duel,
-                        ccw,
-                        cw,
-                    },
-                    out,
-                );
-            }
-        }
         count
     }
 }
