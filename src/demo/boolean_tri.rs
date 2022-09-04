@@ -86,7 +86,13 @@ impl Demo for DemoBooleanTri {
     }
 
     fn ui(&mut self, t: f64, ctx: &egui::Context, ui: &mut Ui) {
-        let mut rng = rand::thread_rng();
+        use rand::prelude::*;
+        use rand_chacha::*;
+
+        let mut seed: <ChaCha20Rng as SeedableRng>::Seed = Default::default();
+        rand::thread_rng().fill(&mut seed);
+        let mut rng = ChaCha20Rng::from_seed(seed);
+
         if ctx.input().key_pressed(egui::Key::G) {
             self.rects = gen_rects(&mut rng, self.view, self.rects.len());
         }
