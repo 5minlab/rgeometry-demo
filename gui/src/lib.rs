@@ -11,6 +11,7 @@ use eframe::{
 use rgeometry::data::{Point, Polygon};
 
 mod boolean;
+mod boolean2;
 mod boolean_tri;
 mod cdt;
 mod delaunay;
@@ -77,17 +78,20 @@ impl Default for MyApp {
         let view = 30f64;
 
         let demos: Vec<Box<dyn Demo>> = vec![
-            Box::new(boolean_tri::DemoBooleanTri::new(view)),
             Box::new(boolean::DemoBoolean::new(view)),
+            /*
+            Box::new(boolean_tri::DemoBooleanTri::new(view)),
+            Box::new(boolean2::DemoBoolean2::new(view)),
             Box::new(cdt::DemoCDT::new(view)),
             Box::new(delaunay::DemoDelaunay::new(view)),
             Box::new(gridnet::DemoGridNet::new(view)),
             Box::new(raster::DemoRaster::new(view)),
+            */
         ];
         let selected = demos[0].name();
 
         Self {
-            pause: false,
+            pause: true,
             t: 0.0,
 
             view,

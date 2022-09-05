@@ -1,5 +1,6 @@
 use core::{
-    boolean::SimplicalChain, build_net, gen_rects, points_cube_subdivide, raster::raster, Rect,
+    boolean::SimplicalChain, build_net, gen_rects, points_circular, points_cube_subdivide,
+    raster::raster, Rect,
 };
 use criterion::{criterion_group, criterion_main, Criterion};
 use rand::prelude::*;
@@ -45,6 +46,18 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         let p0 = Point::new([0.0, 0.0]);
         c.bench_function("TriangularNetwork::visibility", |b| {
             b.iter(|| net.visibility(&constraints, &p0))
+        });
+
+        c.bench_function("TriangularNetwork::visibility circle", |b| {
+            let points_circle = points_circular(10.0, 32);
+            let p_circle = Polygon::new(points_circle).unwrap();
+            let sx_circle = SimplicalChain::from_polygon(&p_circle);
+
+            b.iter(|| {
+                let sx = sx.intersect(&sx_circle);
+                let (net, constraints) = build_net(view, &sx, true);
+                net.visibility(&constraints, &p0)
+            });
         });
 
         let vis = net.visibility(&constraints, &p0);

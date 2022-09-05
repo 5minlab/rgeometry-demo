@@ -8,7 +8,7 @@ rust
       let sx = m.Simplical.new();
 
       for (let i = 0; i < 10; i++) {
-          const sx0 = m.Simplical.from_rect(i+0.1, i+0.1, 2, 0);
+          const sx0 = m.Simplical.from_rect(i+0.1, i+0.1, 2, 2, 0);
           const sx1 = sx.union(sx0);
 
           sx.free();

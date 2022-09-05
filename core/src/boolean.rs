@@ -1,14 +1,13 @@
 // https://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.83.6811&rep=rep1&type=pdf
 
-use rgeometry::{data::*, Intersects, Orientation, PolygonScalar, TotalOrd};
-use std::cmp::Ordering;
+use rgeometry::{data::*, Intersects, Orientation, PolygonScalar};
 
 #[derive(Clone, Default, Debug, PartialEq)]
 pub struct SimplicalChain<T: PolygonScalar> {
     pub simplices: Vec<Simplex<T>>,
 }
 
-impl<T: PolygonScalar + Copy + TotalOrd> SimplicalChain<T> {
+impl<T: PolygonScalar + Copy> SimplicalChain<T> {
     pub fn from_polygon(p: &Polygon<T>) -> Self {
         let simplices = p
             .iter_boundary_edges()
@@ -37,54 +36,67 @@ impl<T: PolygonScalar + Copy + TotalOrd> SimplicalChain<T> {
         return sum;
     }
 
-    fn subdivide(&self, other: &SimplicalChain<T>) -> SimplicalChain<T> {
-        let mut simplices = Vec::new();
+    pub fn subdivide_prepare(&self, other: &SimplicalChain<T>) -> Vec<(usize, usize, Point<T>)> {
+        let mut intersections = Vec::new();
 
-        for s0 in &self.simplices {
+        for (i0, s0) in self.simplices.iter().enumerate() {
             let l0 = LineSegment::new(EndPoint::Inclusive(s0.src), EndPoint::Inclusive(s0.dst));
-            let mut intersection_points = vec![s0.src, s0.dst];
 
-            for s1 in &other.simplices {
+            for (i1, s1) in other.simplices.iter().enumerate() {
                 let l1 = LineSegment::new(EndPoint::Inclusive(s1.src), EndPoint::Inclusive(s1.dst));
-
                 match l0.intersect(&l1) {
                     Some(ILineSegment::Crossing) => {
-                        // eprintln!("crossing, l0={:?}, l1={:?}", l0, l1);
-                        let line0 = Line::new_through(&s0.src, &s0.dst);
-                        let line1 = Line::new_through(&s1.src, &s1.dst);
-
-                        if let Some(p) = line0.intersection_point(&line1) {
-                            if !intersection_points.contains(&p)
-                                && Ordering::Less == s0.src.cmp_distance_to(&p, &s0.dst)
-                                && Ordering::Less == s0.dst.cmp_distance_to(&p, &s0.src)
-                            {
-                                intersection_points.push(p);
-                            }
+                        let l0 = Line::new_through(&s0.src, &s0.dst);
+                        let l1 = Line::new_through(&s1.src, &s1.dst);
+                        if let Some(p) = l0.intersection_point(&l1) {
+                            intersections.push((i0, i1, p));
                         }
                     }
                     Some(ILineSegment::Overlap(view)) => {
-                        // eprintln!("{:?} / {:?} / {:?}", l0, l1, view);
+                        // eprintln!("overlap {:?} / {:?} / {:?}", l0, l1, view);
                         let p = **view.min.inner();
-                        if !intersection_points.contains(&p) {
-                            intersection_points.push(p);
-                        }
+                        intersections.push((i0, i1, p));
                         let p = **view.max.inner();
-                        if !intersection_points.contains(&p) {
-                            intersection_points.push(p);
-                        }
+                        intersections.push((i0, i1, p));
                     }
                     _ => (),
+                }
+            }
+        }
+        intersections
+    }
+
+    fn subdivide(
+        &self,
+        intersections: &[(usize, usize, Point<T>)],
+        is_first: bool,
+    ) -> SimplicalChain<T> {
+        let mut simplices = Vec::new();
+
+        for (i0, s0) in self.simplices.iter().enumerate() {
+            let mut intersection_points = vec![s0.src, s0.dst];
+
+            for (idx0, idx1, p) in intersections {
+                if (is_first && *idx0 == i0) || (!is_first && *idx1 == i0) {
+                    intersection_points.push(*p);
                 }
             }
 
             if intersection_points.len() > 2 {
                 intersection_points.sort_by(|a, b| s0.src.cmp_distance_to(a, b));
             }
-            for i in 0..(intersection_points.len() - 1) {
-                let p0 = intersection_points[i];
-                let p1 = intersection_points[i + 1];
+            let mut last = intersection_points[0];
+            for i in 1..intersection_points.len() {
+                let next = intersection_points[i];
+                if last == next {
+                    continue;
+                }
                 // eprintln!("{:?} {:?}", p0, p1);
-                simplices.push(Simplex { src: p0, dst: p1 });
+                simplices.push(Simplex {
+                    src: last,
+                    dst: next,
+                });
+                last = next;
             }
         }
 
@@ -99,8 +111,9 @@ impl<T: PolygonScalar + Copy + TotalOrd> SimplicalChain<T> {
         let sx1 = other;
 
         // subdivide, simplical chain
-        let sx0_subdivide = sx0.subdivide(sx1);
-        let sx1_subdivide = sx1.subdivide(sx0);
+        let intersections = sx0.subdivide_prepare(sx1);
+        let sx0_subdivide = sx0.subdivide(&intersections, true);
+        let sx1_subdivide = sx1.subdivide(&intersections, false);
 
         // calculate edge characteristics
 
@@ -152,7 +165,9 @@ impl<T: PolygonScalar + Copy + TotalOrd> SimplicalChain<T> {
         &self,
         other: &SimplicalChain<T>,
         include_sx0: bool,
+        rev_sx0: bool,
         include_sx1: bool,
+        rev_sx1: bool,
     ) -> SimplicalChain<T> {
         let sx0 = self;
         let sx1 = other;
@@ -164,13 +179,13 @@ impl<T: PolygonScalar + Copy + TotalOrd> SimplicalChain<T> {
 
         for (idx, s) in sx0_subdivide.simplices.into_iter().enumerate() {
             if (ec_sx0[idx] == 1.0) ^ include_sx0 {
-                simplices.push(s);
+                simplices.push(if !rev_sx0 { s } else { s.reverse() });
             }
         }
 
         for (idx, s) in sx1_subdivide.simplices.into_iter().enumerate() {
             if (ec_sx1[idx] == 1.0) ^ include_sx1 {
-                simplices.push(s);
+                simplices.push(if !rev_sx1 { s } else { s.reverse() });
             }
         }
 
@@ -178,15 +193,15 @@ impl<T: PolygonScalar + Copy + TotalOrd> SimplicalChain<T> {
     }
 
     pub fn intersect(&self, other: &SimplicalChain<T>) -> SimplicalChain<T> {
-        self.run(other, false, false)
+        self.run(other, false, false, false, false)
     }
 
     pub fn union(&self, other: &SimplicalChain<T>) -> SimplicalChain<T> {
-        self.run(other, true, true)
+        self.run(other, true, false, true, false)
     }
 
     pub fn subtract(&self, other: &SimplicalChain<T>) -> SimplicalChain<T> {
-        self.run(other, true, false)
+        self.run(other, true, false, false, true)
     }
 }
 
@@ -424,7 +439,8 @@ mod test {
         let p1 = polygon_cube(Point::new([0.0, 0.0]), 2.0);
         let s1 = SimplicalChain::from_polygon(&p1);
 
-        let subdivide = s0.subdivide(&s1);
+        let intersections = s0.subdivide_prepare(&s1);
+        let subdivide = s0.subdivide(&intersections, true);
         assert_eq!(subdivide, s0);
     }
 
@@ -436,7 +452,7 @@ mod test {
         let p1 = polygon_cube(Point::new([0.0, 0.0]), 2.0);
         let s1 = SimplicalChain::from_polygon(&p1);
 
-        let sx = s0.bool_intersect(&s1);
+        let sx = s0.intersect(&s1);
         assert_eq!(sx.simplices.len(), 4);
         for s in &sx.simplices {
             assert!(s0.simplices.contains(s));
@@ -451,7 +467,7 @@ mod test {
         let p1 = polygon_cube(Point::new([0.0, 0.0]), 2.0);
         let s1 = SimplicalChain::from_polygon(&p1);
 
-        let sx = s0.bool_union(&s1);
+        let sx = s0.union(&s1);
         assert_eq!(sx.simplices.len(), 4);
         for s in &sx.simplices {
             assert!(s1.simplices.contains(s));
@@ -466,7 +482,8 @@ mod test {
         let p1 = polygon_cube(Point::new([2.0, 0.0]), 1.0);
         let s1 = SimplicalChain::from_polygon(&p1);
 
-        let subdivide = s0.subdivide(&s1);
+        let intersections = s0.subdivide_prepare(&s1);
+        let subdivide = s0.subdivide(&intersections, true);
         assert_eq!(subdivide, s0);
     }
 
@@ -479,7 +496,7 @@ mod test {
         let p1 = polygon_cube(Point::new([2.0, 0.0]), 1.0);
         let s1 = SimplicalChain::from_polygon(&p1);
 
-        let s = s0.bool_intersect(&s1);
+        let s = s0.intersect(&s1);
         eprintln!("out={:?}", s);
         todo!();
     }
@@ -494,7 +511,8 @@ mod test {
         let p1 = polygon_cube(Point::new([2.0, 0.0]), 1.0);
         let s1 = SimplicalChain::from_polygon(&p1);
 
-        let subdivide = s0.subdivide(&s1);
+        let intersections = s0.subdivide_prepare(&s1);
+        let subdivide = s0.subdivide(&intersections, true);
         assert_eq!(subdivide.simplices.len(), 6);
     }
 
@@ -506,7 +524,8 @@ mod test {
         let p1 = polygon_cube(Point::new([2.0, 0.0]), 1.0);
         let s1 = SimplicalChain::from_polygon(&p1);
 
-        let subdivide = s0.subdivide(&s1);
+        let intersections = s0.subdivide_prepare(&s1);
+        let subdivide = s0.subdivide(&intersections, true);
         assert_eq!(subdivide.simplices.len(), 6);
     }
 
@@ -518,7 +537,7 @@ mod test {
         let p1 = polygon_cube(Point::new([4.0, 4.0]), 2.0);
         let s1 = SimplicalChain::from_polygon(&p1);
 
-        let sx = s0.bool_intersect(&s1);
+        let sx = s0.intersect(&s1);
 
         let p_expected = polygon_cube(Point::new([3.0, 3.0]), 1.0);
         let sx_expected = SimplicalChain::from_polygon(&p_expected);
@@ -538,7 +557,8 @@ mod test {
         let p1 = polygon_cube(Point::new([2.0, 0.5]), 1.0);
         let s1 = SimplicalChain::from_polygon(&p1);
 
-        let subdivide = s0.subdivide(&s1);
+        let intersections = s0.subdivide_prepare(&s1);
+        let subdivide = s0.subdivide(&intersections, true);
         assert_eq!(subdivide.simplices.len(), 5);
     }
 
@@ -550,7 +570,8 @@ mod test {
         let p1 = polygon_cube_subdivide(Point::new([4.0, 0.0]), 1.0, 3);
         let s1 = SimplicalChain::from_polygon(&p1);
 
-        let subdivide = s0.subdivide(&s1);
+        let intersections = s0.subdivide_prepare(&s1);
+        let subdivide = s0.subdivide(&intersections, true);
         assert_eq!(subdivide.simplices.len(), 9);
     }
 
@@ -562,9 +583,9 @@ mod test {
         let p1 = polygon_cube_subdivide(Point::new([7.0, 0.0]), 4.0, 3);
         let s1 = SimplicalChain::from_polygon(&p1);
 
-        let subdivide = s0.subdivide(&s1);
-        eprintln!("{:?}", subdivide);
-        assert_eq!(subdivide.simplices.len(), 6);
+        let intersections = s0.subdivide_prepare(&s1);
+        let subdivide = s0.subdivide(&intersections, true);
+        assert_eq!(subdivide.simplices.len(), 7);
     }
 
     #[test]
@@ -575,7 +596,8 @@ mod test {
         let p1 = polygon_cube_subdivide(Point::new([6.0, 0.0]), 3.0, 3);
         let s1 = SimplicalChain::from_polygon(&p1);
 
-        let subdivide = s0.subdivide(&s1);
+        let intersections = s0.subdivide_prepare(&s1);
+        let subdivide = s0.subdivide(&intersections, true);
         assert_eq!(subdivide.simplices.len(), 6);
     }
 
