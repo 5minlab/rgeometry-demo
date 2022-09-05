@@ -8,7 +8,7 @@ use rgeometry::data::Point;
 fn rect_union(rects: &[Rect]) -> SimplicalChain<f64> {
     let mut sx = SimplicalChain::default();
     for r in rects {
-        let p = r.polygon();
+        let p = r.polygon(1);
         let sx_r = SimplicalChain::from_polygon(&p);
         sx = sx.union(&sx_r);
     }
@@ -43,6 +43,7 @@ pub struct DemoBooleanTri {
     opt_render_vis: bool,
     opt_cut: bool,
     opt_prune: bool,
+    opt_limit: bool,
 
     view: f64,
 
@@ -70,6 +71,7 @@ impl DemoBooleanTri {
             opt_render_vis: true,
             opt_cut,
             opt_prune: true,
+            opt_limit: true,
 
             view,
 
@@ -113,6 +115,7 @@ impl Demo for DemoBooleanTri {
             ui.checkbox(&mut self.opt_cut, "cut");
             ui.separator();
             ui.checkbox(&mut self.opt_prune, "prune");
+            ui.checkbox(&mut self.opt_limit, "limit");
         });
 
         for r in &mut self.rects {
@@ -124,15 +127,42 @@ impl Demo for DemoBooleanTri {
         self.net = net;
         self.constraints = c;
 
-        self.vis = self
-            .net
-            .visibility(&self.constraints, &Point::new([0.0, 0.0]));
+        let vis = {
+            let pos = Point::new([0.0, 0.0]);
+            let mut vis = self.net.visibility(&self.constraints, &pos);
+
+            if self.opt_limit {
+                let limit = 15.0f64;
+                let limit_sq = limit * limit;
+
+                for i in 0..vis.len() {
+                    let (ref mut p0, ref mut p1) = vis[i];
+
+                    let dist: f64 = p0.squared_euclidean_distance(&pos);
+                    if dist > limit_sq {
+                        let ratio = (limit_sq / dist).sqrt();
+                        let v = *p0 - pos;
+                        *p0 = pos + v * ratio;
+                    }
+
+                    let dist: f64 = p1.squared_euclidean_distance(&pos);
+                    if dist > limit_sq {
+                        let ratio = (limit_sq / dist).sqrt();
+                        let v = *p1 - pos;
+                        *p1 = pos + v * ratio;
+                    }
+                }
+            }
+            vis
+        };
+
+        self.vis = vis;
     }
 
     fn plot_ui(&self, plot_ui: &mut PlotUi) {
         if self.opt_render_rect {
             for r in &self.rects {
-                let p = r.polygon();
+                let p = r.polygon(1);
                 let pe = p_rg_to_egui(&p);
 
                 plot_ui.polygon(pe.color(Color32::RED));

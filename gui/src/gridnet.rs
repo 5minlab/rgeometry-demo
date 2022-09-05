@@ -311,10 +311,10 @@ impl EguiRect {
         let mut p_points = Vec::new();
         let mut pe_points = Vec::new();
 
-        let p = rect.polygon();
+        let p = rect.polygon(1);
 
         let r_extend = rect.add_extents(SQRT_2 / 2.0, SQRT_2 / 2.0);
-        let r_extend_p = r_extend.polygon();
+        let r_extend_p = r_extend.polygon(1);
 
         let bb = p.bounding_box();
         let area = GridArea::new(&bb);
@@ -359,12 +359,12 @@ impl EguiRect {
     }
 
     fn ui(&self, plot_ui: &mut PlotUi, opts: &EguiRectOpts) {
-        let p = self.rect.polygon();
+        let p = self.rect.polygon(1);
         let pe = p_rg_to_egui(&p);
 
         let bb = p.bounding_box();
         let bb_r = Rect::from_bb(&bb);
-        let bb_p = bb_r.polygon();
+        let bb_p = bb_r.polygon(1);
         let bb_pe = p_rg_to_egui(&bb_p);
 
         if opts.render_polygon {

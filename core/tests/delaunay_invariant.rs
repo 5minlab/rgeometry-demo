@@ -39,7 +39,7 @@ mod tests {
     fn test_build_visibility(view: f64, rects: &[Rect]) {
         let mut sx = SimplicalChain::default();
         for r in rects {
-            let p = r.polygon();
+            let p = r.polygon(1);
             let sx_r = SimplicalChain::from_polygon(&p);
             sx = sx.union(&sx_r);
         }

@@ -30,14 +30,16 @@ impl Simplical {
         self.clone()
     }
 
-    pub fn from_rect(x: f64, y: f64, extent_x: f64, extent_y: f64, rot: f64) -> Self {
-        let center = Point::new([x, y]);
-        let p0 = center + rotate(Vector([-extent_x, -extent_y]), rot);
-        let p1 = center + rotate(Vector([extent_x, -extent_y]), rot);
-        let p2 = center + rotate(Vector([extent_x, extent_y]), rot);
-        let p3 = center + rotate(Vector([-extent_x, extent_y]), rot);
-
-        let p = Polygon::new(vec![p0, p1, p2, p3]).unwrap();
+    pub fn from_rect(
+        x: f64,
+        y: f64,
+        extent_x: f64,
+        extent_y: f64,
+        rot: f64,
+        subdivide: usize,
+    ) -> Self {
+        let r = Rect::new(extent_x, extent_y).pos(x, y).rot(rot);
+        let p = r.polygon(subdivide);
         let sx = SimplicalChain::from_polygon(&p);
 
         Self { sx }

@@ -1,35 +1,11 @@
 // https://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.83.6811&rep=rep1&type=pdf
 
+use crate::aabb::AABB;
 use rgeometry::{data::*, Intersects, Orientation, PolygonScalar};
 
 #[derive(Clone, Default, Debug, PartialEq)]
 pub struct SimplicalChain<T: PolygonScalar> {
     pub simplices: Vec<Simplex<T>>,
-}
-
-fn bounding_min<T: PolygonScalar + Copy>(p0: &Point<T>, p1: &Point<T>) -> Point<T> {
-    let mut min = p0.clone();
-    if p1.array[0] < min.array[0] {
-        min.array[0] = p1.array[0];
-    }
-    if p1.array[1] < min.array[1] {
-        min.array[1] = p1.array[1];
-    }
-    min
-}
-
-fn bounding_max<T: PolygonScalar + Copy>(p0: &Point<T>, p1: &Point<T>) -> Point<T> {
-    let mut max = p0.clone();
-    if p1.array[0] > max.array[0] {
-        max.array[0] = p1.array[0];
-    }
-    if p1.array[1] > max.array[1] {
-        max.array[1] = p1.array[1];
-    }
-    max
-}
-fn segment_intersect<T: PolygonScalar>(a: &T, b: &T, c: &T, d: &T) -> bool {
-    a < d && b > c
 }
 
 fn aabb_intersect<T: PolygonScalar + Copy>(
@@ -38,23 +14,12 @@ fn aabb_intersect<T: PolygonScalar + Copy>(
     q0: &Point<T>,
     q1: &Point<T>,
 ) -> bool {
-    let pmin = bounding_min(p0, p1);
-    let pmax = bounding_max(p0, p1);
+    let mut aabb_p = AABB::new(p0);
+    aabb_p.extend(p1);
+    let mut aabb_q = AABB::new(q0);
+    aabb_q.extend(q1);
 
-    let qmin = bounding_min(q0, q1);
-    let qmax = bounding_max(q0, q1);
-
-    segment_intersect(
-        &pmin.array[0],
-        &pmax.array[0],
-        &qmin.array[0],
-        &qmax.array[0],
-    ) || segment_intersect(
-        &pmin.array[1],
-        &pmax.array[1],
-        &qmin.array[1],
-        &qmax.array[1],
-    )
+    aabb_p.interects(&aabb_q)
 }
 
 impl<T: PolygonScalar + Copy> SimplicalChain<T> {
@@ -70,18 +35,12 @@ impl<T: PolygonScalar + Copy> SimplicalChain<T> {
     }
 
     pub fn characteristic(&self, q: &Point<T>) -> f64 {
-        for simplex in &self.simplices {
-            if simplex.on_non_original_edge(q) {
-                // eprintln!("on-non-original-edge");
-                return 1.0;
-            }
-        }
-
         let mut sum = 0f64;
         for simplex in &self.simplices {
-            let c = simplex.beta(q);
-            // eprintln!("c={:?}", c);
-            sum += c;
+            match simplex.beta0(q) {
+                Some(beta) => sum += beta,
+                None => return 1.0,
+            }
         }
         return sum;
     }
@@ -289,85 +248,40 @@ impl<T: PolygonScalar + Clone> Simplex<T> {
         Point::orient_along_direction(&origin, Direction::Through(&self.src), &self.dst)
     }
 
-    fn on_non_original_edge(&self, q: &Point<T>) -> bool {
-        use std::cmp::Ordering::*;
+    // None if q is on non-original edge
+    // Some(beta) if not
+    fn beta0(&self, q: &Point<T>) -> Option<f64> {
+        let origin = Point::new([T::from_constant(0), T::from_constant(0)]);
+
         use Orientation::*;
 
+        let sign = self.sign();
+        let dir0 = Point::orient_along_direction(&origin, Direction::Through(&self.src), q);
+        let dir1 = Point::orient_along_direction(&origin, Direction::Through(&self.dst), q);
         let dir2 = Point::orient_along_direction(&self.src, Direction::Through(&self.dst), q);
-        match dir2 {
-            CoLinear => {
-                // given point might be on non-original edge
-                let cmp_0 = self.src.cmp_distance_to(q, &self.dst);
-                let cmp_1 = self.dst.cmp_distance_to(q, &self.src);
 
-                match (cmp_0, cmp_1) {
-                    (Greater, _) => false,
-                    (_, Greater) => false,
-                    // p is on non-original edge
-                    _ => true,
-                }
+        let beta = match (dir0, dir1, dir2, sign) {
+            (ClockWise | CoLinear, CounterClockWise | CoLinear, CoLinear, ClockWise) => {
+                return None
             }
-            _ => false,
-        }
+            (CounterClockWise | CoLinear, ClockWise | CoLinear, CoLinear, CounterClockWise) => {
+                return None
+            }
+            // Q is on some original edge
+            (CoLinear, CounterClockWise, ClockWise, ClockWise) => -0.5,
+            (CoLinear, ClockWise, CounterClockWise, CounterClockWise) => 0.5,
+            (ClockWise, CoLinear, ClockWise, ClockWise) => -0.5,
+            (CounterClockWise, CoLinear, CounterClockWise, CounterClockWise) => 0.5,
+            (CounterClockWise, ClockWise, CounterClockWise, CounterClockWise) => 1.0,
+            (ClockWise, CounterClockWise, ClockWise, ClockWise) => -1.0,
+            _ => 0.0,
+        };
+        Some(beta)
     }
 
     // assume that p is not on non-original edge of the simplex
     fn beta(&self, q: &Point<T>) -> f64 {
-        let origin = Point::new([T::from_constant(0), T::from_constant(0)]);
-
-        use std::cmp::Ordering::*;
-        use Orientation::*;
-
-        let sign = self.sign();
-        /*
-        eprintln!(
-            "characteristic: sign={:?}, q={:?}, self={:?}",
-            q, sign, self
-        );
-        */
-        let signval = match sign {
-            ClockWise => -1.0,
-            CounterClockWise => 1.0,
-            CoLinear => 0.0,
-        };
-
-        let dir0 = Point::orient_along_direction(&origin, Direction::Through(&self.src), q);
-        let dir1 = Point::orient_along_direction(&origin, Direction::Through(&self.dst), q);
-
-        match (dir0, dir1) {
-            // Q is on some original edge
-            (CoLinear, _) => {
-                if dir0 == CoLinear && origin.cmp_distance_to(q, &self.src) != Greater {
-                    signval / 2.0
-                } else {
-                    0.0
-                }
-            }
-            (_, CoLinear) => {
-                if dir1 == CoLinear && origin.cmp_distance_to(q, &self.dst) != Greater {
-                    signval / 2.0
-                } else {
-                    0.0
-                }
-            }
-            (CounterClockWise, ClockWise) => {
-                let dir2 =
-                    Point::orient_along_direction(&self.src, Direction::Through(&self.dst), q);
-                match (sign, dir2) {
-                    (CounterClockWise, CounterClockWise) => signval,
-                    _ => 0.0,
-                }
-            }
-            (ClockWise, CounterClockWise) => {
-                let dir2 =
-                    Point::orient_along_direction(&self.src, Direction::Through(&self.dst), q);
-                match (sign, dir2) {
-                    (ClockWise, ClockWise) => signval,
-                    _ => 0.0,
-                }
-            }
-            _ => 0.0,
-        }
+        self.beta0(q).unwrap_or(0.0)
     }
 }
 

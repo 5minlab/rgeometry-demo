@@ -33,7 +33,7 @@ pub struct DemoBoolean2 {
 fn rect_union(rects: &[Rect]) -> SimplicalChain<f64> {
     let mut sx = SimplicalChain::default();
     for r in rects {
-        let p = r.polygon();
+        let p = r.polygon(1);
         let sx_r = SimplicalChain::from_polygon(&p);
         sx = sx.union(&sx_r);
     }
@@ -267,7 +267,7 @@ impl Demo for DemoBoolean2 {
     fn plot_ui(&self, plot_ui: &mut PlotUi) {
         if self.opt_render_rect {
             for r in &self.rects {
-                let p = r.polygon();
+                let p = r.polygon(1);
                 let pe = p_rg_to_egui(&p);
 
                 plot_ui.polygon(pe.color(Color32::RED));

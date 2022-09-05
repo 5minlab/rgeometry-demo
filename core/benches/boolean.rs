@@ -19,7 +19,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
 
         let mut sx = SimplicalChain::default();
         for r in rects {
-            let p = r.polygon();
+            let p = r.polygon(1);
             let sx_r = SimplicalChain::from_polygon(&p);
             sx = sx.union(&sx_r);
         }
@@ -60,6 +60,20 @@ pub fn criterion_benchmark(c: &mut Criterion) {
                 for (p1, p2) in &vis {
                     raster(1, &[p0, *p1, *p2], |x, y| {
                         sum += x + y;
+                    });
+                }
+            })
+        });
+
+        c.bench_function("TriangularNetwork::visibility raster dist", |b| {
+            b.iter(|| {
+                let mut sum = 0.0;
+                let limit = 200.0;
+                for (p1, p2) in &vis {
+                    raster(1, &[p0, *p1, *p2], |x, y| {
+                        if x * x + y * y < limit {
+                            sum += x + y;
+                        }
                     });
                 }
             })

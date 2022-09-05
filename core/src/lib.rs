@@ -1,3 +1,4 @@
+pub mod aabb;
 pub mod boolean;
 pub mod delaunay;
 pub mod raster;
@@ -51,7 +52,7 @@ pub fn points_circular(radius: f64, count: usize) -> Vec<Point<f64>> {
     let p = Vector([radius, 0.0]);
     for i in 0..count {
         let theta = std::f64::consts::PI * 2.0 * i as f64 / count as f64;
-        v.push(Point::from(rotate(p.clone(), theta)));
+        v.push(Point::from(rotate(&p, theta)));
     }
     v
 }
@@ -74,13 +75,17 @@ fn points_along(src: &Point<f64>, dst: &Point<f64>, subdivide: usize, out: &mut 
     }
 }
 
-pub fn points_cube_subdivide(pos: Point<f64>, extent: f64, subdivide: usize) -> Vec<Point<f64>> {
+pub fn points_rect_subdivide(
+    pos: Point<f64>,
+    extent: Vector<f64, 2>,
+    subdivide: usize,
+) -> Vec<Point<f64>> {
     let mut points = Vec::with_capacity(subdivide * 4);
 
-    let p0 = pos + Vector([-extent, -extent]);
-    let p1 = pos + Vector([extent, -extent]);
-    let p2 = pos + Vector([extent, extent]);
-    let p3 = pos + Vector([-extent, extent]);
+    let p0 = pos + Vector([-extent.0[0], -extent.0[1]]);
+    let p1 = pos + Vector([extent.0[0], -extent.0[1]]);
+    let p2 = pos + Vector([extent.0[0], extent.0[1]]);
+    let p3 = pos + Vector([-extent.0[0], extent.0[1]]);
 
     points_along(&p3, &p0, subdivide, &mut points);
     points_along(&p0, &p1, subdivide, &mut points);
@@ -90,13 +95,17 @@ pub fn points_cube_subdivide(pos: Point<f64>, extent: f64, subdivide: usize) -> 
     points
 }
 
+pub fn points_cube_subdivide(pos: Point<f64>, extent: f64, subdivide: usize) -> Vec<Point<f64>> {
+    points_rect_subdivide(pos, Vector([extent, extent]), subdivide)
+}
+
 pub fn points_cube(pos: Point<f64>, extent: f64) -> Vec<Point<f64>> {
     points_cube_subdivide(pos, extent, 1)
 }
 
 type P = Vector<f64, 2>;
 
-pub fn rotate(p: P, rot: f64) -> P {
+pub fn rotate(p: &P, rot: f64) -> P {
     Vector([
         rot.cos() * p.0[0] + rot.sin() * p.0[1],
         rot.sin() * p.0[0] - rot.cos() * p.0[1],
@@ -153,14 +162,16 @@ impl Rect {
         Self { rot, ..self }
     }
 
-    pub fn polygon(&self) -> Polygon<f64> {
+    pub fn polygon(&self, subdivide: usize) -> Polygon<f64> {
+        let points = points_rect_subdivide(Point::new([0.0, 0.0]), Vector(self.extent), subdivide);
         let center = Point::new(self.pos);
-        let p0 = center + rotate(Vector([-self.extent[0], -self.extent[1]]), self.rot);
-        let p1 = center + rotate(Vector([self.extent[0], -self.extent[1]]), self.rot);
-        let p2 = center + rotate(Vector([self.extent[0], self.extent[1]]), self.rot);
-        let p3 = center + rotate(Vector([-self.extent[0], self.extent[1]]), self.rot);
-
-        Polygon::new(vec![p0, p1, p2, p3]).unwrap()
+        Polygon::new(
+            points
+                .into_iter()
+                .map(|p| center + rotate(p.as_vec(), self.rot))
+                .collect(),
+        )
+        .unwrap()
     }
 }
 
