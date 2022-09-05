@@ -8,6 +8,28 @@ use delaunay::*;
 use rand::prelude::*;
 use rgeometry::data::*;
 
+pub fn visibility_limit(vis: &mut Vec<(Point<f64>, Point<f64>)>, center: &Point<f64>, limit: f64) {
+    let limit_sq = limit * limit;
+
+    for i in 0..vis.len() {
+        let (ref mut p0, ref mut p1) = vis[i];
+
+        let dist: f64 = p0.squared_euclidean_distance(center);
+        if dist > limit_sq {
+            let ratio = (limit_sq / dist).sqrt();
+            let v = *p0 - *center;
+            *p0 = *center + v * ratio;
+        }
+
+        let dist: f64 = p1.squared_euclidean_distance(center);
+        if dist > limit_sq {
+            let ratio = (limit_sq / dist).sqrt();
+            let v = *p1 - *center;
+            *p1 = *center + v * ratio;
+        }
+    }
+}
+
 pub fn points_grid(extent: f64, grid_size: usize) -> Vec<Point<f64>> {
     let mut v = Vec::with_capacity(grid_size * grid_size);
     for i in 0..grid_size {

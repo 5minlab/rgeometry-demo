@@ -96,13 +96,25 @@ impl Triangulated {
 
     pub fn visibility(&self, x: f64, y: f64) -> js_sys::Float64Array {
         let vis = self.net.visibility(&self.constraints, &Point::new([x, y]));
-        let mut v = Vec::with_capacity(vis.len() * 4);
-        for (from, to) in &vis {
-            v.push(from.array[0]);
-            v.push(from.array[1]);
-            v.push(to.array[0]);
-            v.push(to.array[1]);
-        }
-        js_sys::Float64Array::from(&v[..])
+
+        visibility_serialize(&vis)
     }
+
+    pub fn visibility_limit(&self, x: f64, y: f64, limit: f64) -> js_sys::Float64Array {
+        let p = Point::new([x, y]);
+        let mut vis = self.net.visibility(&self.constraints, &p);
+        core::visibility_limit(&mut vis, &p, limit);
+        visibility_serialize(&vis)
+    }
+}
+
+fn visibility_serialize(vis: &[(Point<f64>, Point<f64>)]) -> js_sys::Float64Array {
+    let mut v = Vec::with_capacity(vis.len() * 4);
+    for (from, to) in vis {
+        v.push(from.array[0]);
+        v.push(from.array[1]);
+        v.push(to.array[0]);
+        v.push(to.array[1]);
+    }
+    js_sys::Float64Array::from(&v[..])
 }

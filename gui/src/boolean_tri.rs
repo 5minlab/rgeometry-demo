@@ -1,7 +1,10 @@
 use super::{p_rg_to_egui, plot_line, Demo};
-use core::boolean::*;
-use core::delaunay::{TriIdx, TriangularNetwork, VertIdx};
-use core::{build_net, gen_rects, Rect};
+use core::{
+    boolean::*,
+    build_net,
+    delaunay::{TriIdx, TriangularNetwork, VertIdx},
+    gen_rects, visibility_limit, Rect,
+};
 use eframe::egui::{self, epaint::Color32, plot::*, Ui};
 use rgeometry::data::Point;
 
@@ -132,26 +135,7 @@ impl Demo for DemoBooleanTri {
             let mut vis = self.net.visibility(&self.constraints, &pos);
 
             if self.opt_limit {
-                let limit = 15.0f64;
-                let limit_sq = limit * limit;
-
-                for i in 0..vis.len() {
-                    let (ref mut p0, ref mut p1) = vis[i];
-
-                    let dist: f64 = p0.squared_euclidean_distance(&pos);
-                    if dist > limit_sq {
-                        let ratio = (limit_sq / dist).sqrt();
-                        let v = *p0 - pos;
-                        *p0 = pos + v * ratio;
-                    }
-
-                    let dist: f64 = p1.squared_euclidean_distance(&pos);
-                    if dist > limit_sq {
-                        let ratio = (limit_sq / dist).sqrt();
-                        let v = *p1 - pos;
-                        *p1 = pos + v * ratio;
-                    }
-                }
+                visibility_limit(&mut vis, &pos, 15.0f64);
             }
             vis
         };
