@@ -63,12 +63,11 @@ impl Demo for DemoRaster {
         plot_line(plot_ui, &[p0, p1, p2, p0], Color32::RED);
         raster(self.grid_size, &self.verts, |x, y| {
             let m = self.grid_size as f64;
-            let h = self.grid_size as f64 / 2.0;
             let p = Polygon::new(PlotPoints::Owned(vec![
-                PlotPoint::new(m * x - h, m * y - h),
-                PlotPoint::new(m * x - h, m * y + h),
-                PlotPoint::new(m * x + h, m * y + h),
-                PlotPoint::new(m * x + h, m * y - h),
+                PlotPoint::new(m * x, m * y),
+                PlotPoint::new(m * x, m * y + m),
+                PlotPoint::new(m * x + m, m * y + m),
+                PlotPoint::new(m * x + m, m * y),
             ]))
             .color(Color32::WHITE);
             plot_ui.polygon(p);

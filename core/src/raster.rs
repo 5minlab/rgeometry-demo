@@ -84,7 +84,7 @@ where
             // round to next 0.5
             let mut x = roundx(xl);
             while x < xr {
-                f(x, y);
+                f(x.floor(), y.floor());
                 x += 1.0;
             }
 
