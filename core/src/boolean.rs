@@ -7,6 +7,56 @@ pub struct SimplicalChain<T: PolygonScalar> {
     pub simplices: Vec<Simplex<T>>,
 }
 
+fn bounding_min<T: PolygonScalar + Copy>(p0: &Point<T>, p1: &Point<T>) -> Point<T> {
+    let mut min = p0.clone();
+    if p1.array[0] < min.array[0] {
+        min.array[0] = p1.array[0];
+    }
+    if p1.array[1] < min.array[1] {
+        min.array[1] = p1.array[1];
+    }
+    min
+}
+
+fn bounding_max<T: PolygonScalar + Copy>(p0: &Point<T>, p1: &Point<T>) -> Point<T> {
+    let mut max = p0.clone();
+    if p1.array[0] > max.array[0] {
+        max.array[0] = p1.array[0];
+    }
+    if p1.array[1] > max.array[1] {
+        max.array[1] = p1.array[1];
+    }
+    max
+}
+fn segment_intersect<T: PolygonScalar>(a: &T, b: &T, c: &T, d: &T) -> bool {
+    a < d && b > c
+}
+
+fn aabb_intersect<T: PolygonScalar + Copy>(
+    p0: &Point<T>,
+    p1: &Point<T>,
+    q0: &Point<T>,
+    q1: &Point<T>,
+) -> bool {
+    let pmin = bounding_min(p0, p1);
+    let pmax = bounding_max(p0, p1);
+
+    let qmin = bounding_min(q0, q1);
+    let qmax = bounding_max(q0, q1);
+
+    segment_intersect(
+        &pmin.array[0],
+        &pmax.array[0],
+        &qmin.array[0],
+        &qmax.array[0],
+    ) || segment_intersect(
+        &pmin.array[1],
+        &pmax.array[1],
+        &qmin.array[1],
+        &qmax.array[1],
+    )
+}
+
 impl<T: PolygonScalar + Copy> SimplicalChain<T> {
     pub fn from_polygon(p: &Polygon<T>) -> Self {
         let simplices = p
@@ -40,10 +90,12 @@ impl<T: PolygonScalar + Copy> SimplicalChain<T> {
         let mut intersections = Vec::new();
 
         for (i0, s0) in self.simplices.iter().enumerate() {
-            let l0 = LineSegment::new(EndPoint::Inclusive(s0.src), EndPoint::Inclusive(s0.dst));
-
+            let l0 = LineSegment::new(EndPoint::Exclusive(s0.src), EndPoint::Exclusive(s0.dst));
             for (i1, s1) in other.simplices.iter().enumerate() {
-                let l1 = LineSegment::new(EndPoint::Inclusive(s1.src), EndPoint::Inclusive(s1.dst));
+                if !aabb_intersect(&s0.src, &s0.dst, &s1.src, &s1.dst) {
+                    continue;
+                }
+                let l1 = LineSegment::new(EndPoint::Exclusive(s1.src), EndPoint::Exclusive(s1.dst));
                 match l0.intersect(&l1) {
                     Some(ILineSegment::Crossing) => {
                         let l0 = Line::new_through(&s0.src, &s0.dst);
@@ -572,7 +624,7 @@ mod test {
 
         let intersections = s0.subdivide_prepare(&s1);
         let subdivide = s0.subdivide(&intersections, true);
-        assert_eq!(subdivide.simplices.len(), 9);
+        assert_eq!(subdivide.simplices.len(), 8);
     }
 
     #[test]
@@ -585,7 +637,7 @@ mod test {
 
         let intersections = s0.subdivide_prepare(&s1);
         let subdivide = s0.subdivide(&intersections, true);
-        assert_eq!(subdivide.simplices.len(), 7);
+        assert_eq!(subdivide.simplices.len(), 6);
     }
 
     #[test]

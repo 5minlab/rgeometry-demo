@@ -11,21 +11,6 @@ pub fn criterion_benchmark(c: &mut Criterion) {
     let seed: <ChaCha20Rng as SeedableRng>::Seed = Default::default();
     let mut rng = ChaCha20Rng::from_seed(seed);
 
-    for subdivide in [1, 10, 100] {
-        let p0 = points_cube_subdivide(Point::new([0.0, 0.0]), 100.0, subdivide);
-        let p1 = points_cube_subdivide(Point::new([50.0, 50.0]), 100.0, subdivide);
-        let p0 = Polygon::new(p0).unwrap();
-        let p1 = Polygon::new(p1).unwrap();
-
-        let s0 = SimplicalChain::from_polygon(&p0);
-        let s1 = SimplicalChain::from_polygon(&p1);
-
-        c.bench_function(
-            &format!("SimplicalChain::bool_intersect {subdivide}"),
-            |b| b.iter(|| s0.intersect(&s1)),
-        );
-    }
-
     // complex visibility
     {
         let view = 30.0;
@@ -40,6 +25,14 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         }
 
         c.bench_function("build_net", |b| b.iter(|| build_net(view, &sx, true)));
+
+        c.bench_function("circle intersection", |b| {
+            let points_circle = points_circular(10.0, 32);
+            let p_circle = Polygon::new(points_circle).unwrap();
+            let sx_circle = SimplicalChain::from_polygon(&p_circle);
+
+            b.iter(|| sx.intersect(&sx_circle))
+        });
 
         let (net, constraints) = build_net(view, &sx, true);
 
@@ -75,6 +68,21 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         c.bench_function("SimplicalChain::characteristic", |b| {
             b.iter(|| sx.characteristic(&p0))
         });
+    }
+
+    for subdivide in [1, 10, 100] {
+        let p0 = points_cube_subdivide(Point::new([0.0, 0.0]), 100.0, subdivide);
+        let p1 = points_cube_subdivide(Point::new([50.0, 50.0]), 100.0, subdivide);
+        let p0 = Polygon::new(p0).unwrap();
+        let p1 = Polygon::new(p1).unwrap();
+
+        let s0 = SimplicalChain::from_polygon(&p0);
+        let s1 = SimplicalChain::from_polygon(&p1);
+
+        c.bench_function(
+            &format!("SimplicalChain::bool_intersect {subdivide}"),
+            |b| b.iter(|| s0.intersect(&s1)),
+        );
     }
 }
 
