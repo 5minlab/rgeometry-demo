@@ -104,10 +104,10 @@ pub fn points_rect_subdivide(
 ) -> Vec<Point<f64>> {
     let mut points = Vec::with_capacity(subdivide * 4);
 
-    let p0 = pos + Vector([-extent.0[0], -extent.0[1]]);
-    let p1 = pos + Vector([extent.0[0], -extent.0[1]]);
-    let p2 = pos + Vector([extent.0[0], extent.0[1]]);
-    let p3 = pos + Vector([-extent.0[0], extent.0[1]]);
+    let p3 = pos + Vector([-extent.0[0], -extent.0[1]]);
+    let p2 = pos + Vector([extent.0[0], -extent.0[1]]);
+    let p1 = pos + Vector([extent.0[0], extent.0[1]]);
+    let p0 = pos + Vector([-extent.0[0], extent.0[1]]);
 
     points_along(&p3, &p0, subdivide, &mut points);
     points_along(&p0, &p1, subdivide, &mut points);
@@ -184,16 +184,17 @@ impl Rect {
         Self { rot, ..self }
     }
 
-    pub fn polygon(&self, subdivide: usize) -> Polygon<f64> {
+    pub fn points(&self, subdivide: usize) -> Vec<Point<f64>> {
         let points = points_rect_subdivide(Point::new([0.0, 0.0]), Vector(self.extent), subdivide);
         let center = Point::new(self.pos);
-        Polygon::new(
-            points
-                .into_iter()
-                .map(|p| center + rotate(p.as_vec(), self.rot))
-                .collect(),
-        )
-        .unwrap()
+        points
+            .into_iter()
+            .map(|p| center + rotate(p.as_vec(), self.rot))
+            .collect()
+    }
+
+    pub fn polygon(&self, subdivide: usize) -> Polygon<f64> {
+        Polygon::new_unchecked(self.points(subdivide))
     }
 }
 
@@ -287,5 +288,17 @@ mod tests {
             lerp_pf64(&Point::new([0.0, 0.0]), &Point::new([2.0, 2.0]), 0.5),
             Point::new([1.0, 1.0])
         );
+    }
+
+    #[test]
+    fn test_rect() {
+        let r = Rect::new(1.0, 1.0);
+        let points = r.points(1);
+
+        eprintln!("{:?}", points);
+        let mut p = Polygon::new_unchecked(points);
+        eprintln!("p={:?}", p);
+        p.ensure_ccw();
+        eprintln!("p={:?}", p);
     }
 }

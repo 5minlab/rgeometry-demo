@@ -44,11 +44,8 @@ impl Demo for DemoRaster {
                 regen = true;
             }
             ui.separator();
-            ui.label("grid size");
             for size in [1, 5, 10, 20] {
-                if ui.button(&format!("{size}")).clicked() {
-                    self.grid_size = size;
-                }
+                ui.radio_value(&mut self.grid_size, size, size.to_string());
             }
         });
 

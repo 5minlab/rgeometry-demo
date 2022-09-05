@@ -163,7 +163,7 @@ impl Demo for DemoBooleanTri {
             plot_net_inner(&self.sx, &self.net, plot_ui, self.opt_prune);
         }
 
-        if self.opt_render_vis {
+        if self.opt_render_vis && !self.vis.is_empty() {
             let mut last = &self.vis[self.vis.len() - 1].1;
             for (p0, p1) in &self.vis {
                 plot_line(plot_ui, &[last, p0], Color32::YELLOW);

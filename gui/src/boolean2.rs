@@ -24,20 +24,48 @@ pub struct DemoBoolean2 {
     view: f64,
 
     count: usize,
+    subdivide: usize,
     rects: Vec<Rect>,
     sx: SimplicalChain<f64>,
 
-    subdiv: bool,
+    rational: bool,
 }
 
-fn rect_union(rects: &[Rect]) -> SimplicalChain<f64> {
-    let mut sx = SimplicalChain::default();
-    for r in rects {
-        let p = r.polygon(1);
-        let sx_r = SimplicalChain::from_polygon(&p);
-        sx = sx.union(&sx_r);
+fn rect_union(rects: &[Rect], subdivide: usize, rational: bool) -> SimplicalChain<f64> {
+    if !rational {
+        let mut sx = SimplicalChain::default();
+        for r in rects {
+            let p = r.polygon(subdivide);
+            let sx_r = SimplicalChain::from_polygon(&p);
+            sx = sx.union(&sx_r);
+        }
+        sx
+    } else {
+        use num::{FromPrimitive, ToPrimitive};
+
+        let mut sx = SimplicalChain::default();
+        for r in rects {
+            let p = r.polygon(subdivide);
+            let points = p
+                .iter_boundary()
+                .map(|p| p.map(|v| num::BigRational::from_f64(v).unwrap()))
+                .collect::<Vec<_>>();
+            let p = Polygon::new_unchecked(points);
+            let sx_r = SimplicalChain::from_polygon(&p);
+            sx = sx.union(&sx_r);
+        }
+
+        SimplicalChain {
+            simplices: sx
+                .simplices
+                .into_iter()
+                .map(|s| Simplex {
+                    src: s.src.map(|v| v.to_f64().unwrap()),
+                    dst: s.dst.map(|v| v.to_f64().unwrap()),
+                })
+                .collect(),
+        }
     }
-    sx
 }
 
 impl DemoBoolean2 {
@@ -179,7 +207,9 @@ impl DemoBoolean2 {
             }
             rects
         };
-        let sx = rect_union(&rects);
+        let rational = false;
+        let subdivide = 1;
+        let sx = rect_union(&rects, subdivide, rational);
 
         Self {
             opt_render_rect: true,
@@ -192,17 +222,18 @@ impl DemoBoolean2 {
             view,
 
             count: 3,
+            subdivide,
             rects,
             sx,
 
-            subdiv: false,
+            rational,
         }
     }
 }
 
 impl Demo for DemoBoolean2 {
     fn name(&self) -> &'static str {
-        "boolean"
+        "boolean2"
     }
 
     fn ui(&mut self, _t: f64, _ctx: &egui::Context, ui: &mut Ui) {
@@ -222,23 +253,20 @@ impl Demo for DemoBoolean2 {
             ] {
                 ui.radio_value(&mut self.opt_circle_mode, *mode, *label);
             }
+        });
 
-            ui.separator();
+        ui.horizontal(|ui| {
             ui.checkbox(&mut self.opt_render_rect, "render rect");
             ui.checkbox(&mut self.opt_render_union, "render union");
 
-            ui.checkbox(&mut self.subdiv, "subdiv");
+            ui.checkbox(&mut self.rational, "rational");
             ui.separator();
 
-            ui.add(egui::Slider::new(&mut self.count, 0..=self.rects.len() - 1).text("counts"));
+            ui.add(egui::Slider::new(&mut self.count, 0..=self.rects.len()).text("counts"));
+            ui.add(egui::Slider::new(&mut self.subdivide, 1..=10).text("subdivide"));
         });
 
-        /*
-        for r in &mut self.rects {
-            r.rot = t;
-        }
-        */
-        self.sx = rect_union(&self.rects[..self.count]);
+        self.sx = rect_union(&self.rects[..self.count], self.subdivide, self.rational);
 
         if self.opt_circle_mode == CircleMode::Disabled {
             return;

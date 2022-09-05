@@ -8,7 +8,7 @@ pub struct SimplicalChain<T: PolygonScalar> {
     pub simplices: Vec<Simplex<T>>,
 }
 
-fn aabb_intersect<T: PolygonScalar + Copy>(
+fn aabb_intersect<T: PolygonScalar + Clone>(
     p0: &Point<T>,
     p1: &Point<T>,
     q0: &Point<T>,
@@ -22,13 +22,13 @@ fn aabb_intersect<T: PolygonScalar + Copy>(
     aabb_p.interects(&aabb_q)
 }
 
-impl<T: PolygonScalar + Copy> SimplicalChain<T> {
+impl<T: PolygonScalar + Clone> SimplicalChain<T> {
     pub fn from_polygon(p: &Polygon<T>) -> Self {
         let simplices = p
             .iter_boundary_edges()
             .map(|e| Simplex {
-                src: *e.src,
-                dst: *e.dst,
+                src: e.src.clone(),
+                dst: e.dst.clone(),
             })
             .collect::<Vec<_>>();
         Self { simplices }
@@ -49,12 +49,18 @@ impl<T: PolygonScalar + Copy> SimplicalChain<T> {
         let mut intersections = Vec::new();
 
         for (i0, s0) in self.simplices.iter().enumerate() {
-            let l0 = LineSegment::new(EndPoint::Exclusive(s0.src), EndPoint::Exclusive(s0.dst));
+            let l0 = LineSegment::new(
+                EndPoint::Exclusive(s0.src.clone()),
+                EndPoint::Exclusive(s0.dst.clone()),
+            );
             for (i1, s1) in other.simplices.iter().enumerate() {
                 if !aabb_intersect(&s0.src, &s0.dst, &s1.src, &s1.dst) {
                     continue;
                 }
-                let l1 = LineSegment::new(EndPoint::Exclusive(s1.src), EndPoint::Exclusive(s1.dst));
+                let l1 = LineSegment::new(
+                    EndPoint::Exclusive(s1.src.clone()),
+                    EndPoint::Exclusive(s1.dst.clone()),
+                );
                 match l0.intersect(&l1) {
                     Some(ILineSegment::Crossing) => {
                         let l0 = Line::new_through(&s0.src, &s0.dst);
@@ -65,10 +71,10 @@ impl<T: PolygonScalar + Copy> SimplicalChain<T> {
                     }
                     Some(ILineSegment::Overlap(view)) => {
                         // eprintln!("overlap {:?} / {:?} / {:?}", l0, l1, view);
-                        let p = **view.min.inner();
-                        intersections.push((i0, i1, p));
-                        let p = **view.max.inner();
-                        intersections.push((i0, i1, p));
+                        let p = view.min.take();
+                        intersections.push((i0, i1, p.clone()));
+                        let p = view.max.take();
+                        intersections.push((i0, i1, p.clone()));
                     }
                     _ => (),
                 }
@@ -85,29 +91,32 @@ impl<T: PolygonScalar + Copy> SimplicalChain<T> {
         let mut simplices = Vec::new();
 
         for (i0, s0) in self.simplices.iter().enumerate() {
-            let mut intersection_points = vec![s0.src, s0.dst];
+            let mut intersection_points = vec![s0.src.clone(), s0.dst.clone()];
 
             for (idx0, idx1, p) in intersections {
                 if (is_first && *idx0 == i0) || (!is_first && *idx1 == i0) {
-                    intersection_points.push(*p);
+                    intersection_points.push(p.clone());
                 }
             }
 
             if intersection_points.len() > 2 {
                 intersection_points.sort_by(|a, b| s0.src.cmp_distance_to(a, b));
             }
-            let mut last = intersection_points[0];
-            for i in 1..intersection_points.len() {
-                let next = intersection_points[i];
-                if last == next {
+            let mut last = None;
+            for p in intersection_points {
+                if last.is_none() {
+                    last = Some(p);
+                    continue;
+                }
+                if last.as_ref() == Some(&p) {
                     continue;
                 }
                 // eprintln!("{:?} {:?}", p0, p1);
                 simplices.push(Simplex {
-                    src: last,
-                    dst: next,
+                    src: last.take().unwrap(),
+                    dst: p.clone(),
                 });
-                last = next;
+                last = Some(p);
             }
         }
 
