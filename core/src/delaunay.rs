@@ -1078,6 +1078,13 @@ impl<T: PolygonScalar> TriangularNetwork<T> {
         let t = self.tri(e.tri);
 
         if edges
+            .binary_search(&(self.edge_from(&e), self.edge_to(&e)))
+            .is_ok()
+        {
+            return count;
+        }
+
+        if edges
             .binary_search(&(self.edge_to(&e), self.edge_from(&e)))
             .is_ok()
         {

@@ -137,8 +137,8 @@ impl Triangulated {
                     count += 1;
                     let x = x as usize;
                     let y = y as usize;
-                    let idx = y * grid_count_x + x;
-                    grid.set_index(idx as u32, 1.0);
+                    let idx = (y * grid_count_x + x) as u32;
+                    grid.set_index(idx, 1.0);
                 })
             }
         }
