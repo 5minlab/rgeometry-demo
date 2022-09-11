@@ -23,6 +23,13 @@ pub fn plot_line(plot_ui: &mut PlotUi, points: &[&Point<f64>], color: Color32) {
     plot_ui.line(plot::Line::new(PlotPoints::Owned(e_points)).color(color));
 }
 
+pub fn plot_polygon(plot_ui: &mut PlotUi, p: &Polygon<f64>, color: Color32) {
+    for edge in p.iter_boundary_edges() {
+        let e_points = vec![pt_egui(edge.src), pt_egui(edge.dst)];
+        plot_ui.line(plot::Line::new(PlotPoints::Owned(e_points)).color(color));
+    }
+}
+
 fn plot_net(net: &TriangularNetwork<f64>, plot_ui: &mut PlotUi, render_supertri: bool) {
     for (_t_idx, t) in net.triangles.iter().enumerate() {
         let [v0, v1, v2] = t.vertices;

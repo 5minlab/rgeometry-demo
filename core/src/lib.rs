@@ -150,6 +150,10 @@ impl Rect {
         }
     }
 
+    pub fn from_aabb(aabb: aabb::AABB<f64>) -> Self {
+        Self::from_bb(&(aabb.min, aabb.max))
+    }
+
     pub fn from_bb(t: &(Point<f64>, Point<f64>)) -> Self {
         let (p0, p1) = t;
         Self {

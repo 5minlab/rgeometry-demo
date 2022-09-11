@@ -1,5 +1,26 @@
+use crate::aabb::AABB;
 use crate::delaunay::SubIdx;
 use rgeometry::data::Point;
+
+pub fn raster_bounds(grid_size: usize, verts: &[Point<f64>; 3]) -> AABB<f64> {
+    let grid_size = grid_size as f64;
+
+    let [p0, p1, p2] = &[
+        Point::new([verts[0].array[0] / grid_size, verts[0].array[1] / grid_size]),
+        Point::new([verts[1].array[0] / grid_size, verts[1].array[1] / grid_size]),
+        Point::new([verts[2].array[0] / grid_size, verts[2].array[1] / grid_size]),
+    ];
+
+    let mut aabb = AABB::new(p0);
+    aabb.extend(p1);
+    aabb.extend(p2);
+    aabb.min.array[0] = aabb.min.array[0].floor();
+    aabb.min.array[1] = aabb.min.array[1].floor();
+    aabb.max.array[0] = aabb.max.array[0].ceil();
+    aabb.max.array[1] = aabb.max.array[1].ceil();
+
+    aabb
+}
 
 pub fn raster<F>(grid_size: usize, verts: &[Point<f64>; 3], f: F)
 where

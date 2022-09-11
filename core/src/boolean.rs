@@ -22,6 +22,36 @@ fn aabb_intersect<T: PolygonScalar + Clone>(
     aabb_p.interects(&aabb_q)
 }
 
+fn intersection_point<T: PolygonScalar + Clone + std::fmt::Debug>(
+    p0: &Point<T>,
+    p1: &Point<T>,
+    q0: &Point<T>,
+    q1: &Point<T>,
+) -> Option<Point<T>> {
+    let [x0, y0] = p0.array.clone();
+    let [x1, y1] = p1.array.clone();
+    let [x2, y2] = q0.array.clone();
+    let [x3, y3] = q1.array.clone();
+
+    let denom0 = (x0 - x1) * (y2 - y3) - (y0 - y1) * (x2 - x3);
+
+    let [x0, y0] = p1.array.clone();
+    let [x1, y1] = p0.array.clone();
+    let [x2, y2] = q1.array.clone();
+    let [x3, y3] = q0.array.clone();
+    let denom1 = (x0 - x1) * (y2 - y3) - (y0 - y1) * (x2 - x3);
+
+    eprintln!("{:?}, {:?}", denom0, denom1);
+
+    let (l0, l1) = if denom0 > denom1 {
+        (Line::new_through(p0, p1), Line::new_through(q0, q1))
+    } else {
+        (Line::new_through(p1, p0), Line::new_through(q1, q0))
+    };
+
+    l0.intersection_point(&l1)
+}
+
 impl<T: PolygonScalar + Clone> SimplicalChain<T> {
     pub fn from_polygon(p: &Polygon<T>) -> Self {
         let simplices = p
@@ -63,9 +93,7 @@ impl<T: PolygonScalar + Clone> SimplicalChain<T> {
                 );
                 match l0.intersect(&l1) {
                     Some(ILineSegment::Crossing) => {
-                        let l0 = Line::new_through(&s0.src, &s0.dst);
-                        let l1 = Line::new_through(&s1.src, &s1.dst);
-                        if let Some(p) = l0.intersection_point(&l1) {
+                        if let Some(p) = intersection_point(&s0.src, &s0.dst, &s1.src, &s1.dst) {
                             intersections.push((i0, i1, p));
                         }
                     }

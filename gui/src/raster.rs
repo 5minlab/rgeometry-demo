@@ -1,6 +1,8 @@
-use core::{points_tri, raster::raster};
+use core::raster::raster_bounds;
 
-use super::{plot_line, Demo};
+use core::{points_tri, raster::raster, Rect};
+
+use super::{plot_line, plot_polygon, Demo};
 use eframe::egui::{
     self,
     epaint::Color32,
@@ -56,10 +58,22 @@ impl Demo for DemoRaster {
     }
 
     fn plot_ui(&self, plot_ui: &mut plot::PlotUi) {
+        let m = self.grid_size as f64;
+
         let [ref p0, ref p1, ref p2] = self.verts;
         plot_line(plot_ui, &[p0, p1, p2, p0], Color32::RED);
+
+        let aabb = raster_bounds(self.grid_size, &self.verts);
+        let bb_r = Rect::from_aabb(aabb);
+        plot_polygon(
+            plot_ui,
+            &bb_r
+                .polygon(1)
+                .map_points(|p| Point::new([p.array[0] * m, p.array[1] * m])),
+            Color32::BLUE,
+        );
+
         raster(self.grid_size, &self.verts, |x, y| {
-            let m = self.grid_size as f64;
             let p = Polygon::new(PlotPoints::Owned(vec![
                 PlotPoint::new(m * x, m * y),
                 PlotPoint::new(m * x, m * y + m),

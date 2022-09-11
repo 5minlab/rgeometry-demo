@@ -1,4 +1,5 @@
 use core::{
+    aabb::AABB,
     boolean::SimplicalChain,
     delaunay::{TriangularNetwork, VertIdx},
     *,
@@ -113,8 +114,8 @@ impl Triangulated {
         y: f64,
         limit: f64,
         gridinfo: &[f64],
-        grid: js_sys::Float32Array,
-    ) -> usize {
+        grid: js_sys::Uint8Array,
+    ) -> VisibilityResult {
         let p = Point::new([x, y]);
         let mut vis = self.net.visibility(&self.constraints, &p);
         core::visibility_limit(&mut vis, &p, limit);
@@ -127,6 +128,22 @@ impl Triangulated {
             let mut v = Vec::with_capacity(l);
             v.resize(l, 0.0f32);
 
+            // find bounding box
+            let mut aabb: Option<AABB<f64>> = None;
+            for (p0, p1) in &vis {
+                let aabb_other =
+                    core::raster::raster_bounds(*gridsize as usize, &[p, p1.clone(), p0.clone()]);
+                aabb = match aabb {
+                    Some(mut aabb) => {
+                        aabb.extend_aabb(&aabb_other);
+                        Some(aabb)
+                    }
+                    None => Some(aabb_other),
+                }
+            }
+
+            let aabb = aabb.unwrap_or(AABB::new(&Point::new([*minx, *miny])));
+
             for (p0, p1) in vis {
                 core::raster::raster(*gridsize as usize, &[p, p1, p0], |x, y| {
                     let x = x - minx / gridsize;
@@ -138,12 +155,31 @@ impl Triangulated {
                     let x = x as usize;
                     let y = y as usize;
                     let idx = (y * grid_count_x + x) as u32;
-                    grid.set_index(idx, 1.0);
+                    grid.set_index(idx, 1);
                 })
             }
+
+            VisibilityResult {
+                min_x: (aabb.min.array[0] - minx / gridsize).max(0.0),
+                min_y: (aabb.min.array[1] - miny / gridsize).max(0.0),
+                max_x: (aabb.max.array[0] - minx / gridsize).min(grid_count_x as f64),
+                max_y: (aabb.max.array[1] - miny / gridsize).min(grid_count_y as f64),
+                count,
+            }
+        } else {
+            todo!();
         }
-        count
     }
+}
+
+#[wasm_bindgen]
+pub struct VisibilityResult {
+    pub min_x: f64,
+    pub min_y: f64,
+    pub max_x: f64,
+    pub max_y: f64,
+
+    pub count: usize,
 }
 
 fn visibility_serialize(vis: &[(Point<f64>, Point<f64>)]) -> js_sys::Float32Array {

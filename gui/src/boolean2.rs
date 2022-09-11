@@ -221,7 +221,7 @@ impl DemoBoolean2 {
 
             view,
 
-            count: 3,
+            count: rects.len(),
             subdivide,
             rects,
             sx,

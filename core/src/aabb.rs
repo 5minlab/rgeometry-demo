@@ -1,5 +1,6 @@
 use rgeometry::{data::Point, PolygonScalar};
 
+#[derive(Clone)]
 pub struct AABB<T> {
     pub min: Point<T>,
     pub max: Point<T>,
@@ -17,6 +18,13 @@ impl<T: PolygonScalar + Clone> AABB<T> {
         }
     }
 
+    pub fn from_bb(p: &(Point<T>, Point<T>)) -> Self {
+        Self {
+            min: p.0.clone(),
+            max: p.1.clone(),
+        }
+    }
+
     pub fn extend(&mut self, p: &Point<T>) {
         if p.array[0] < self.min.array[0] {
             self.min.array[0] = p.array[0].clone();
@@ -29,6 +37,11 @@ impl<T: PolygonScalar + Clone> AABB<T> {
         } else if p.array[1] > self.max.array[1] {
             self.max.array[1] = p.array[1].clone();
         }
+    }
+
+    pub fn extend_aabb(&mut self, other: &Self) {
+        self.extend(&other.min);
+        self.extend(&other.max);
     }
 
     pub fn interects(&self, other: &Self) -> bool {
