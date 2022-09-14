@@ -41,8 +41,6 @@ fn intersection_point<T: PolygonScalar + Clone + std::fmt::Debug>(
     let [x3, y3] = q0.array.clone();
     let denom1 = (x0 - x1) * (y2 - y3) - (y0 - y1) * (x2 - x3);
 
-    eprintln!("{:?}, {:?}", denom0, denom1);
-
     let (l0, l1) = if denom0 > denom1 {
         (Line::new_through(p0, p1), Line::new_through(q0, q1))
     } else {

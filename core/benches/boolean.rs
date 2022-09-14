@@ -41,6 +41,10 @@ pub fn criterion_benchmark(c: &mut Criterion) {
             b.iter(|| net.visibility(&constraints, &p0))
         });
 
+        c.bench_function("TriangularNetwork::locate_recursive", |b| {
+            b.iter(|| net.locate_recursive(&p0))
+        });
+
         c.bench_function("TriangularNetwork::visibility circle", |b| {
             let points_circle = points_circular(10.0, 32);
             let p_circle = Polygon::new(points_circle).unwrap();

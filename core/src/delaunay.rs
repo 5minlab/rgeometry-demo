@@ -1014,10 +1014,10 @@ impl<T: PolygonScalar> TriangularNetwork<T> {
                     let ccw = t.vert(sub);
                     if let Some(duel) = self.edge_duel(&edge) {
                         queries.push(VisibilityQuery {
-                            src: p.clone(),
+                            src: p,
                             edge: duel,
-                            ccw,
-                            cw,
+                            ccw: self.vert(ccw),
+                            cw: self.vert(cw),
                         });
                     }
                 }
@@ -1039,8 +1039,8 @@ impl<T: PolygonScalar> TriangularNetwork<T> {
 
                 let l = Line::new_through(p_start, p_end);
 
-                let l_ccw = Line::new_through(p, self.vert(s.ccw));
-                let l_cw = Line::new_through(p, self.vert(s.cw));
+                let l_ccw = Line::new_through(p, s.ccw);
+                let l_cw = Line::new_through(p, s.cw);
 
                 let p_ccw = l.intersection_point(&l_ccw).unwrap();
                 let p_cw = l.intersection_point(&l_cw).unwrap();
@@ -1061,22 +1061,19 @@ impl<T: PolygonScalar> TriangularNetwork<T> {
         pt_mean(&[p0, p1, p2])
     }
 
-    fn visibility_tri(
-        &self,
+    fn visibility_tri<'a, 'b>(
+        &'a self,
         edges: &[(VertIdx, VertIdx)],
-        q: VisibilityQuery<T>,
-        out: &mut Vec<VisibilitySegment>,
+        q: VisibilityQuery<'a, 'b, T>,
+        out: &mut Vec<VisibilitySegment<'a, T>>,
     ) -> usize {
         let mut count = 1;
         let e = q.edge;
         use Orientation::*;
 
         let p = &q.src;
-        let p_cw = self.vert(q.cw);
-        let p_ccw = self.vert(q.ccw);
 
-        let t = self.tri(e.tri);
-
+        // outside-to-inside. ignore
         if edges
             .binary_search(&(self.edge_from(&e), self.edge_to(&e)))
             .is_ok()
@@ -1096,10 +1093,10 @@ impl<T: PolygonScalar> TriangularNetwork<T> {
             return count;
         }
 
-        let v1 = t.vert(e.sub.ccw());
+        let v1 = self.tri_vert(e.tri, e.sub.ccw());
 
-        let d_ccw_1 = Point::orient_along_direction(p, Direction::Through(p_ccw), self.vert(v1));
-        let d_cw_1 = Point::orient_along_direction(p, Direction::Through(p_cw), self.vert(v1));
+        let d_ccw_1 = Point::orient_along_direction(p, Direction::Through(q.ccw), v1);
+        let d_cw_1 = Point::orient_along_direction(p, Direction::Through(q.cw), v1);
 
         // cw side
         if d_cw_1 != ClockWise {
@@ -1115,7 +1112,7 @@ impl<T: PolygonScalar> TriangularNetwork<T> {
                 count += self.visibility_tri(
                     edges,
                     VisibilityQuery {
-                        src: q.src.clone(),
+                        src: q.src,
                         edge: duel,
                         ccw,
                         cw,
@@ -1139,7 +1136,7 @@ impl<T: PolygonScalar> TriangularNetwork<T> {
                 count += self.visibility_tri(
                     edges,
                     VisibilityQuery {
-                        src: q.src.clone(),
+                        src: q.src,
                         edge: duel,
                         ccw,
                         cw,
@@ -1153,17 +1150,17 @@ impl<T: PolygonScalar> TriangularNetwork<T> {
     }
 }
 
-struct VisibilitySegment {
+struct VisibilitySegment<'a, T> {
     edge: Edge,
-    ccw: VertIdx,
-    cw: VertIdx,
+    ccw: &'a Point<T>,
+    cw: &'a Point<T>,
 }
 
-struct VisibilityQuery<T> {
-    src: Point<T>,
+struct VisibilityQuery<'a, 'b, T> {
+    src: &'b Point<T>,
     edge: Edge,
-    ccw: VertIdx,
-    cw: VertIdx,
+    ccw: &'a Point<T>,
+    cw: &'a Point<T>,
 }
 
 /// Triangle representation
