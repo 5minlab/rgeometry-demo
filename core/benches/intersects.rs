@@ -24,7 +24,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
     }
 
     for i in [100, 1000, 10000] {
-        c.bench_function(&format!("Intersections"), |b| {
+        c.bench_function(&format!("Intersections {i}"), |b| {
             b.iter(|| {
                 let mut intersections = Intersections::new(&lines[0..i]);
                 intersections.sweep();
