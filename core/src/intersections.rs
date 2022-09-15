@@ -19,6 +19,7 @@ struct SweepEvent {
 pub struct Intersections<'a> {
     lines: &'a [(Point<f64>, Point<f64>)],
 
+    // TODO: binary search tree
     sweepline: Vec<usize>,
     events: BinaryHeap<Reverse<SweepEvent>>,
 }
