@@ -16,6 +16,7 @@ mod boolean_tri;
 mod cdt;
 mod delaunay;
 mod gridnet;
+mod intersections;
 mod raster;
 
 pub fn plot_line(plot_ui: &mut PlotUi, points: &[&Point<f64>], color: Color32) {
@@ -90,6 +91,7 @@ impl Default for MyApp {
             Box::new(boolean2::DemoBoolean2::new(view)),
             Box::new(cdt::DemoCDT::new(view)),
             Box::new(delaunay::DemoDelaunay::new(view)),
+            Box::new(intersections::DemoIntersections::new(view)),
             Box::new(gridnet::DemoGridNet::new(view)),
             Box::new(raster::DemoRaster::new(view)),
         ];
