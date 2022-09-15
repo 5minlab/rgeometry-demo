@@ -1,6 +1,7 @@
 pub mod aabb;
 pub mod boolean;
 pub mod delaunay;
+pub mod intersections;
 pub mod raster;
 
 use boolean::*;
