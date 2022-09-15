@@ -1,13 +1,12 @@
-use core::raster::raster_bounds;
 use std::collections::HashMap;
 
-use core::{points_uniform, raster::raster, Rect};
+use core::points_uniform;
 
-use super::{plot_line, plot_polygon, pt_egui, Demo};
+use super::{plot_line, pt_egui, Demo};
 use eframe::egui::{
     self,
     epaint::Color32,
-    plot::{self, PlotPoint, PlotPoints, Polygon},
+    plot::{self, PlotPoints},
     Key, Ui,
 };
 use rgeometry::data::Point;

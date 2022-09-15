@@ -324,6 +324,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "criterion",
+ "ordslice",
  "rand",
  "rand_chacha",
  "rgeometry",
@@ -1431,6 +1432,12 @@ checksum = "96bcbab4bfea7a59c2c0fe47211a1ac4e3e96bea6eb446d704f310bc5c732ae2"
 dependencies = [
  "num-traits",
 ]
+
+[[package]]
+name = "ordslice"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dd20eec3dbe4376829cb7d80ae6ac45e0a766831dca50202ff2d40db46a8a024"
 
 [[package]]
 name = "osmesa-sys"

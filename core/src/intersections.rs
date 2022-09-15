@@ -1,6 +1,5 @@
 use rgeometry::data::{Direction, EndPoint, Line, LineSegment, Point};
-use rgeometry::{Intersects, Orientation};
-use std::cmp::Reverse;
+use rgeometry::{Intersects, Orientation, PolygonScalar};
 use std::collections::{BinaryHeap, HashMap};
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -10,34 +9,57 @@ enum SweepEventKind {
     Intersection(usize, usize),
 }
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
-struct SweepEvent {
-    p: Point<f64>,
+#[derive(Debug)]
+struct SweepEvent<T: PolygonScalar> {
+    p: Point<T>,
     kind: SweepEventKind,
 }
 
-pub struct Intersections<'a> {
-    lines: &'a [(Point<f64>, Point<f64>)],
+impl<T: PolygonScalar> std::cmp::PartialEq for SweepEvent<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.p == other.p
+    }
+}
+
+impl<T: PolygonScalar> std::cmp::Eq for SweepEvent<T> {}
+
+impl<T: PolygonScalar> std::cmp::PartialOrd for SweepEvent<T> {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(other.p.cmp(&self.p))
+    }
+}
+
+impl<T: PolygonScalar> std::cmp::Ord for SweepEvent<T> {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        other.p.cmp(&self.p)
+    }
+}
+
+pub struct Intersections<'a, T: PolygonScalar> {
+    lines: &'a [(Point<T>, Point<T>)],
 
     // TODO: binary search tree
     sweepline: Vec<usize>,
-    events: BinaryHeap<Reverse<SweepEvent>>,
+    events: BinaryHeap<SweepEvent<T>>,
 }
 
 // https://www.ics.uci.edu/~goodrich/teach/geom/notes/LineSweep.pdf
-impl<'a> Intersections<'a> {
-    pub fn new(lines: &'a [(Point<f64>, Point<f64>)]) -> Self {
+impl<'a, T> Intersections<'a, T>
+where
+    T: PolygonScalar,
+{
+    pub fn new(lines: &'a [(Point<T>, Point<T>)]) -> Self {
         let mut events = BinaryHeap::new();
 
         for i in 0..lines.len() {
-            events.push(Reverse(SweepEvent {
-                p: lines[i].0,
+            events.push(SweepEvent {
+                p: lines[i].0.clone(),
                 kind: SweepEventKind::Start(i),
-            }));
-            events.push(Reverse(SweepEvent {
-                p: lines[i].1,
+            });
+            events.push(SweepEvent {
+                p: lines[i].1.clone(),
                 kind: SweepEventKind::End(i),
-            }));
+            });
         }
 
         Self {
@@ -48,36 +70,40 @@ impl<'a> Intersections<'a> {
     }
 
     pub fn find_pos(&self, line_idx: usize) -> usize {
-        let l0 = self.lines[line_idx];
-        for i in 0..self.sweepline.len() {
-            let other_line_idx = self.sweepline[i];
-            let l1 = self.lines[other_line_idx];
+        use ordslice::Ext;
+
+        let l0 = &self.lines[line_idx];
+        self.sweepline.upper_bound_by(|i| {
+            let l1 = &self.lines[*i];
             match Point::orient_along_direction(&l1.0, Direction::Through(&l1.1), &l0.0) {
-                Orientation::CounterClockWise => {
-                    return i;
-                }
-                _ => continue,
+                Orientation::ClockWise => std::cmp::Ordering::Less,
+                _ => std::cmp::Ordering::Greater,
             }
-        }
-        self.sweepline.len()
+        })
     }
 
-    fn intersects(&self, idx0: usize, idx1: usize, sweep: f64) -> Option<Point<f64>> {
-        let (p0, p1) = self.lines[idx0];
-        let (p2, p3) = self.lines[idx1];
-        let l0 = LineSegment::new(EndPoint::Exclusive(p0), EndPoint::Exclusive(p1));
-        let l1 = LineSegment::new(EndPoint::Exclusive(p2), EndPoint::Exclusive(p3));
+    fn intersects(&self, idx0: usize, idx1: usize, sweep: &T) -> Option<Point<T>> {
+        let (ref p0, ref p1) = self.lines[idx0];
+        let (ref p2, ref p3) = self.lines[idx1];
+        let l0 = LineSegment::new(
+            EndPoint::Exclusive(p0.clone()),
+            EndPoint::Exclusive(p1.clone()),
+        );
+        let l1 = LineSegment::new(
+            EndPoint::Exclusive(p2.clone()),
+            EndPoint::Exclusive(p3.clone()),
+        );
 
         if l0.intersect(&l1).is_none() {
             return None;
         }
 
-        let l0 = Line::new_through(&p0, &p1);
-        let l1 = Line::new_through(&p2, &p3);
+        let l0 = Line::new_through(p0, p1);
+        let l1 = Line::new_through(p2, p3);
 
         match l0.intersection_point(&l1) {
             Some(v) => {
-                if v[0] > sweep {
+                if &v[0] > sweep {
                     Some(v)
                 } else {
                     None
@@ -87,45 +113,45 @@ impl<'a> Intersections<'a> {
         }
     }
 
-    fn add_intersection_up(&mut self, pos: usize, sweep: f64) {
+    fn add_intersection_up(&mut self, pos: usize, sweep: &T) {
         let line_idx = self.sweepline[pos];
         if let Some(next_line_idx) = self.sweepline.get(pos + 1) {
             if let Some(p) = self.intersects(line_idx, *next_line_idx, sweep) {
-                self.events.push(Reverse(SweepEvent {
+                self.events.push(SweepEvent {
                     p,
                     kind: SweepEventKind::Intersection(line_idx, *next_line_idx),
-                }));
+                });
             }
         }
     }
 
-    fn add_intersection_down(&mut self, pos: usize, sweep: f64) {
+    fn add_intersection_down(&mut self, pos: usize, sweep: &T) {
         let line_idx = self.sweepline[pos];
         if pos > 0 {
             let prev_line_idx = self.sweepline[pos - 1];
             if let Some(p) = self.intersects(line_idx, prev_line_idx, sweep) {
-                self.events.push(Reverse(SweepEvent {
+                self.events.push(SweepEvent {
                     p,
                     kind: SweepEventKind::Intersection(prev_line_idx, line_idx),
-                }));
+                });
             }
         }
     }
 
-    fn add_intersections(&mut self, pos: usize, sweep: f64) {
+    fn add_intersections(&mut self, pos: usize, sweep: &T) {
         self.add_intersection_up(pos, sweep);
         self.add_intersection_down(pos, sweep);
     }
 
-    fn insert(&mut self, line_idx: usize, pos: usize, sweep: f64) {
+    fn insert(&mut self, line_idx: usize, pos: usize, sweep: &T) {
         self.sweepline.insert(pos, line_idx);
         self.add_intersections(pos, sweep);
     }
 
-    pub fn sweep(&mut self) -> HashMap<(usize, usize), Point<f64>> {
+    pub fn sweep(&mut self) -> HashMap<(usize, usize), Point<T>> {
         let mut v = HashMap::new();
-        while let Some(Reverse(ev)) = self.events.pop() {
-            let sweep = ev.p.array[0];
+        while let Some(ev) = self.events.pop() {
+            let sweep = &ev.p.array[0];
             match ev.kind {
                 SweepEventKind::Start(i) => {
                     let pos = self.find_pos(i);

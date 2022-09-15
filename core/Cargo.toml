@@ -7,6 +7,7 @@ edition = "2021"
 anyhow = "1.0.62"
 criterion = "0.3.6"
 rand = "0.8.5"
+ordslice = "0.3"
 rgeometry = { path = "../../rgeometry" }
 
 [dev-dependencies]
