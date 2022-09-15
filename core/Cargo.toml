@@ -24,3 +24,6 @@ harness = false
 name = "delaunay"
 harness = false
 
+[[bench]]
+name = "intersects"
+harness = false
