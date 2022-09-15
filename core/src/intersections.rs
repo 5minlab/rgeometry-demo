@@ -31,7 +31,7 @@ impl<T: PolygonScalar> std::cmp::PartialOrd for SweepEvent<T> {
 
 impl<T: PolygonScalar> std::cmp::Ord for SweepEvent<T> {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        other.p.cmp(&self.p)
+        other.p.cmp(&self.p).then(self.kind.cmp(&other.kind))
     }
 }
 
@@ -77,7 +77,14 @@ where
             let l1 = &self.lines[*i];
             match Point::orient_along_direction(&l1.0, Direction::Through(&l1.1), &l0.0) {
                 Orientation::ClockWise => std::cmp::Ordering::Less,
-                _ => std::cmp::Ordering::Greater,
+                Orientation::CounterClockWise => std::cmp::Ordering::Greater,
+                Orientation::CoLinear => {
+                    match Point::orient_along_direction(&l1.0, Direction::Through(&l1.1), &l0.1) {
+                        Orientation::ClockWise => std::cmp::Ordering::Less,
+                        Orientation::CounterClockWise => std::cmp::Ordering::Greater,
+                        _ => todo!(),
+                    }
+                }
             }
         })
     }
@@ -207,5 +214,27 @@ mod tests {
 
         let mut s = Intersections::new(&lines);
         s.sweep();
+    }
+
+    #[test]
+    fn intersections_touching_1() {
+        let lines = vec![
+            (Point::new([0.0, 0.0]), Point::new([1.0, 0.0])),
+            (Point::new([1.0, 0.0]), Point::new([2.0, 0.0])),
+        ];
+
+        let mut s = Intersections::new(&lines);
+        assert_eq!(s.sweep().len(), 0);
+    }
+
+    #[test]
+    fn intersections_touching_2() {
+        let lines = vec![
+            (Point::new([1.0, 0.0]), Point::new([2.0, 0.0])),
+            (Point::new([0.0, 0.0]), Point::new([1.0, 0.0])),
+        ];
+
+        let mut s = Intersections::new(&lines);
+        assert_eq!(s.sweep().len(), 0);
     }
 }
