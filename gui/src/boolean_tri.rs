@@ -1,12 +1,18 @@
-use super::{p_rg_to_egui, plot_line, Demo};
+use super::{p_rg_to_egui, plot_line, pt_egui, Demo};
 use core::{
     boolean::*,
     build_net,
     delaunay::{TriIdx, TriangularNetwork, VertIdx},
-    gen_rects, visibility_limit, Rect,
+    gen_rects, points_uniform, visibility_limit, Rect,
 };
-use eframe::egui::{self, epaint::Color32, plot::*, Ui};
-use rgeometry::data::Point;
+use eframe::egui::{
+    self,
+    epaint::Color32,
+    plot::{PlotPoints, PlotUi},
+    Ui,
+};
+use rgeometry::data::{Direction, Point};
+use rgeometry::Orientation;
 
 fn rect_union(rects: &[Rect]) -> SimplicalChain<f64> {
     let mut sx = SimplicalChain::default();
@@ -55,6 +61,8 @@ pub struct DemoBooleanTri {
     net: TriangularNetwork<f64>,
     constraints: Vec<(VertIdx, VertIdx)>,
     vis: Vec<(Point<f64>, Point<f64>)>,
+
+    points: Vec<Point<f64>>,
 }
 
 impl DemoBooleanTri {
@@ -74,7 +82,7 @@ impl DemoBooleanTri {
             opt_render_vis: true,
             opt_cut,
             opt_prune: true,
-            opt_limit: true,
+            opt_limit: false,
 
             view,
 
@@ -84,7 +92,34 @@ impl DemoBooleanTri {
             constraints,
 
             vis: Vec::new(),
+
+            points: points_uniform(&mut rng, view, 100),
         }
+    }
+
+    fn point_visible(&self, p: &Point<f64>) -> bool {
+        use Orientation::*;
+
+        let origin = Point::new([0.0, 0.0]);
+        let mut directions = Vec::with_capacity(self.vis.len());
+        for (p0, _p1) in &self.vis {
+            let d = Point::orient_along_direction(&origin, Direction::Through(p0), p);
+            directions.push(d);
+        }
+        directions.push(directions[0]);
+
+        for i in 0..self.vis.len() {
+            let (ref p0, ref p1) = &self.vis[i];
+
+            match (directions[i], directions[i + 1]) {
+                (CounterClockWise, ClockWise) => {
+                    return Point::orient_along_direction(p0, Direction::Through(p1), p)
+                        == CounterClockWise
+                }
+                _ => continue,
+            }
+        }
+        false
     }
 }
 
@@ -171,5 +206,28 @@ impl Demo for DemoBooleanTri {
                 last = p1;
             }
         }
+
+        let mut points = Vec::new();
+        let mut points_visibles = Vec::new();
+
+        for p in &self.points {
+            if self.point_visible(p) {
+                points_visibles.push(pt_egui(p));
+            } else {
+                points.push(pt_egui(p));
+            }
+        }
+
+        plot_ui.points(
+            egui::plot::Points::new(PlotPoints::Owned(points))
+                .color(Color32::RED)
+                .radius(2.0),
+        );
+
+        plot_ui.points(
+            egui::plot::Points::new(PlotPoints::Owned(points_visibles))
+                .color(Color32::LIGHT_BLUE)
+                .radius(2.0),
+        );
     }
 }
