@@ -11,8 +11,7 @@ use eframe::egui::{
     plot::{PlotPoints, PlotUi},
     Ui,
 };
-use rgeometry::data::{Direction, Point};
-use rgeometry::Orientation;
+use rgeometry::data::Point;
 
 fn rect_union(rects: &[Rect]) -> SimplicalChain<f64> {
     let mut sx = SimplicalChain::default();
@@ -95,31 +94,6 @@ impl DemoBooleanTri {
 
             points: points_uniform(&mut rng, view, 100),
         }
-    }
-
-    fn point_visible(&self, p: &Point<f64>) -> bool {
-        use Orientation::*;
-
-        let origin = Point::new([0.0, 0.0]);
-        let mut directions = Vec::with_capacity(self.vis.len());
-        for (p0, _p1) in &self.vis {
-            let d = Point::orient_along_direction(&origin, Direction::Through(p0), p);
-            directions.push(d);
-        }
-        directions.push(directions[0]);
-
-        for i in 0..self.vis.len() {
-            let (ref p0, ref p1) = &self.vis[i];
-
-            match (directions[i], directions[i + 1]) {
-                (CounterClockWise, ClockWise) => {
-                    return Point::orient_along_direction(p0, Direction::Through(p1), p)
-                        == CounterClockWise
-                }
-                _ => continue,
-            }
-        }
-        false
     }
 }
 
@@ -210,8 +184,9 @@ impl Demo for DemoBooleanTri {
         let mut points = Vec::new();
         let mut points_visibles = Vec::new();
 
+        let origin = Point::new([0.0, 0.0]);
         for p in &self.points {
-            if self.point_visible(p) {
+            if core::visibility::point_visible(&origin, &self.vis, p) {
                 points_visibles.push(pt_egui(p));
             } else {
                 points.push(pt_egui(p));
