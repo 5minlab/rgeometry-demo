@@ -3,6 +3,7 @@ pub mod boolean;
 pub mod delaunay;
 pub mod intersections;
 pub mod raster;
+pub mod visibility;
 
 use boolean::*;
 use delaunay::*;

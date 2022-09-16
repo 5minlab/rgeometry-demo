@@ -1,6 +1,6 @@
 use core::{
     boolean::SimplicalChain, build_net, gen_rects, points_circular, points_cube_subdivide,
-    raster::raster, Rect,
+    points_uniform, raster::raster, Rect,
 };
 use criterion::{criterion_group, criterion_main, Criterion};
 use rand::prelude::*;
@@ -86,6 +86,30 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         c.bench_function("SimplicalChain::characteristic", |b| {
             b.iter(|| sx.characteristic(&p0))
         });
+
+        for point_count in [10, 100, 300, 1000] {
+            let points = points_uniform(&mut rng, view, point_count);
+            c.bench_function(&format!("points_visible mesh {point_count}"), |b| {
+                b.iter(|| {
+                    for i in 0..points.len() {
+                        let origin = &points[i];
+                        let vis = net.visibility(&constraints, &origin);
+                        if vis.len() == 0 {
+                            continue;
+                        }
+
+                        for j in 0..points.len() {
+                            if i == j {
+                                continue;
+                            }
+                            let p = &points[j];
+
+                            core::visibility::point_visible(origin, &vis, p);
+                        }
+                    }
+                });
+            });
+        }
     }
 
     for subdivide in [1, 10, 100] {
