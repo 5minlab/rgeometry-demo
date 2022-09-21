@@ -170,6 +170,37 @@ impl Triangulated {
             todo!();
         }
     }
+
+    pub fn connectivity(&self, coords: &[f64]) -> js_sys::Uint16Array {
+        let mut v = Vec::new();
+
+        let mut points = Vec::new();
+        for i in 0..coords.len() / 2 {
+            let x = coords[i * 2];
+            let y = coords[i * 2 + 1];
+            points.push(Point::new([x, y]));
+        }
+
+        for i in 0..points.len() {
+            let p0 = &points[i];
+            let vis = self.net.visibility(&self.constraints, p0);
+            if vis.is_empty() {
+                continue;
+            }
+
+            for j in (i + 1)..points.len() {
+                let p1 = &points[j];
+
+                if core::visibility::point_visible(p0, &vis, p1) {
+                    v.push(i as u16);
+                    v.push(j as u16);
+                }
+                //
+            }
+        }
+
+        js_sys::Uint16Array::from(&v[..])
+    }
 }
 
 #[wasm_bindgen]
