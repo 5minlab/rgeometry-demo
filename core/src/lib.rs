@@ -104,17 +104,39 @@ pub fn points_rect_subdivide(
     extent: Vector<f64, 2>,
     subdivide: usize,
 ) -> Vec<Point<f64>> {
-    let mut points = Vec::with_capacity(subdivide * 4);
-
     let p3 = pos + Vector([-extent.0[0], -extent.0[1]]);
     let p2 = pos + Vector([extent.0[0], -extent.0[1]]);
     let p1 = pos + Vector([extent.0[0], extent.0[1]]);
     let p0 = pos + Vector([-extent.0[0], extent.0[1]]);
 
+    let mut points = Vec::with_capacity(subdivide * 4);
+
     points_along(&p3, &p0, subdivide, &mut points);
     points_along(&p0, &p1, subdivide, &mut points);
     points_along(&p1, &p2, subdivide, &mut points);
     points_along(&p2, &p3, subdivide, &mut points);
+
+    points
+}
+
+pub fn points_rect_seglen(pos: Point<f64>, extent: Vector<f64, 2>, seglen: f64) -> Vec<Point<f64>> {
+    let p0 = pos + Vector([-extent.0[0], extent.0[1]]);
+    let p1 = pos + Vector([extent.0[0], extent.0[1]]);
+    let p2 = pos + Vector([extent.0[0], -extent.0[1]]);
+    let p3 = pos + Vector([-extent.0[0], -extent.0[1]]);
+
+    let width = extent.0[0] * 2.0;
+    let height = extent.0[1] * 2.0;
+
+    let subdivide_horizontal = (width / seglen).ceil() as usize;
+    let subdivide_vertical = (height / seglen).ceil() as usize;
+
+    let mut points = Vec::with_capacity(subdivide_horizontal * 2 + subdivide_vertical + 2);
+
+    points_along(&p3, &p0, subdivide_vertical, &mut points);
+    points_along(&p0, &p1, subdivide_horizontal, &mut points);
+    points_along(&p1, &p2, subdivide_vertical, &mut points);
+    points_along(&p2, &p3, subdivide_horizontal, &mut points);
 
     points
 }
@@ -199,8 +221,21 @@ impl Rect {
             .collect()
     }
 
+    pub fn points_seglen(&self, seglen: f64) -> Vec<Point<f64>> {
+        let points = points_rect_seglen(Point::new([0.0, 0.0]), Vector(self.extent), seglen);
+        let center = Point::new(self.pos);
+        points
+            .into_iter()
+            .map(|p| center + rotate(p.as_vec(), self.rot))
+            .collect()
+    }
+
     pub fn polygon(&self, subdivide: usize) -> Polygon<f64> {
         Polygon::new_unchecked(self.points(subdivide))
+    }
+
+    pub fn polygon_seglen(&self, seglen: f64) -> Polygon<f64> {
+        Polygon::new_unchecked(self.points_seglen(seglen))
     }
 }
 

@@ -4,6 +4,6 @@
     "build-web": "wasm-pack build -t web -d pkg"
   },
   "devDependencies": {
-    "@wasm-tool/wasm-pack-plugin": "1.5.0"
+    "@wasm-tool/wasm-pack-plugin": "1.6.0"
   }
 }

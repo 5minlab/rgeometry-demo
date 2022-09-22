@@ -46,6 +46,21 @@ impl Simplical {
         Self { sx }
     }
 
+    pub fn from_rect_seglen(
+        x: f64,
+        y: f64,
+        extent_x: f64,
+        extent_y: f64,
+        rot: f64,
+        seglen: f64,
+    ) -> Self {
+        let r = Rect::new(extent_x, extent_y).pos(x, y).rot(rot);
+        let p = r.polygon_seglen(seglen);
+        let sx = SimplicalChain::from_polygon(&p);
+
+        Self { sx }
+    }
+
     #[wasm_bindgen]
     pub fn simplices(&self) -> js_sys::Float32Array {
         let mut v = Vec::with_capacity(self.sx.simplices.len() * 4);
