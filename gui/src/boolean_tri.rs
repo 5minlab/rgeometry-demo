@@ -115,7 +115,7 @@ impl Demo for DemoBooleanTri {
         }
 
         ui.horizontal(|ui| {
-            if ui.button("(R) regenerate").clicked() {
+            if ui.button("(G) regenerate").clicked() {
                 self.rects = gen_rects(&mut rng, self.view, self.rects.len());
             }
             ui.separator();
