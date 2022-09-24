@@ -130,6 +130,17 @@ impl Demo for DemoBooleanTri {
             ui.checkbox(&mut self.opt_limit, "limit");
         });
 
+        ui.horizontal(|ui| {
+            let mut len = self.points.len();
+            for count in [0, 10, 100, 1000, 10000] {
+                ui.radio_value(&mut len, count, count.to_string());
+            }
+            if len != self.points.len() {
+                let mut rng = rand::thread_rng();
+                self.points = points_uniform(&mut rng, self.view, len);
+            }
+        });
+
         for r in &mut self.rects {
             r.rot = t;
         }

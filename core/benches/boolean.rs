@@ -87,6 +87,12 @@ pub fn criterion_benchmark(c: &mut Criterion) {
             b.iter(|| sx.characteristic(&p0))
         });
 
+        c.bench_function(&format!("point_visible"), |b| {
+            let points = points_uniform(&mut rng, view, 1);
+            let p1 = points[0];
+            b.iter(|| core::visibility::point_visible(&p0, &vis, &p1));
+        });
+
         for point_count in [10, 100, 300, 1000] {
             let points = points_uniform(&mut rng, view, point_count);
             c.bench_function(&format!("points_visible mesh {point_count}"), |b| {
