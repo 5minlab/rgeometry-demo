@@ -77,6 +77,8 @@ pub enum TriangularNetworkLocation {
     OnEdge(Edge),
     /// The point lies outside the triangle
     Outside(Edge),
+
+    Unknown,
 }
 
 #[derive(Debug)]
@@ -928,7 +930,7 @@ impl<T: PolygonScalar> TriangularNetwork<T> {
                 Ok(idx_v)
             }
 
-            Outside(_e) => {
+            Outside(_) | Unknown => {
                 todo!();
             }
         }
@@ -981,7 +983,7 @@ impl<T: PolygonScalar> TriangularNetwork<T> {
                         Some(idx) => idx,
                         None => {
                             eprintln!("{:?}, {:?}", e, self.tri(e.tri));
-                            todo!();
+                            return Unknown;
                             // return Outside(idx, idx_neighbor);
                         }
                     }
@@ -1031,23 +1033,25 @@ impl<T: PolygonScalar> TriangularNetwork<T> {
             self.visibility_tri(edges, q, &mut out);
         }
 
-        out.into_iter()
-            .map(|s| {
-                let t = self.tri(s.edge.tri);
-                let p_start = self.vert(t.vert(s.edge.sub));
-                let p_end = self.vert(t.vert(s.edge.sub.cw()));
+        let mut pairs = Vec::with_capacity(out.len());
+        for s in out {
+            let t = self.tri(s.edge.tri);
+            let p_start = self.vert(t.vert(s.edge.sub));
+            let p_end = self.vert(t.vert(s.edge.sub.cw()));
 
-                let l = Line::new_through(p_start, p_end);
+            let l = Line::new_through(p_start, p_end);
 
-                let l_ccw = Line::new_through(p, s.ccw);
-                let l_cw = Line::new_through(p, s.cw);
+            let l_ccw = Line::new_through(p, s.ccw);
+            let l_cw = Line::new_through(p, s.cw);
 
-                let p_ccw = l.intersection_point(&l_ccw).unwrap();
-                let p_cw = l.intersection_point(&l_cw).unwrap();
+            if let (Some(p_cw), Some(p_ccw)) =
+                (l.intersection_point(&l_cw), l.intersection_point(&l_ccw))
+            {
+                pairs.push((p_cw, p_ccw));
+            }
+        }
 
-                (p_cw, p_ccw)
-            })
-            .collect::<Vec<_>>()
+        pairs
     }
 
     pub fn centroid(&self, tri: TriIdx) -> Point<T> {
