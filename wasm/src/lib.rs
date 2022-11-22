@@ -216,6 +216,29 @@ impl Triangulated {
 
         js_sys::Uint16Array::from(&v[..])
     }
+
+    pub fn raycast(&self, origin_x: f64, origin_y: f64, coords: &[f64]) -> js_sys::Float32Array {
+        let mut v = Vec::with_capacity(coords.len() * 2);
+
+        let p0 = Point::new([origin_x, origin_y]);
+
+        let vis = self.net.visibility(&self.constraints, &p0);
+        if vis.is_empty() {
+            return js_sys::Float32Array::from(&v[..]);
+        }
+
+        for i in 0..coords.len() / 2 {
+            let x = coords[i * 2] + origin_x;
+            let y = coords[i * 2 + 1] + origin_y;
+            let p1 = Point::new([x, y]);
+
+            let p2 = core::visibility::raycast(&p0, &vis, &p1).unwrap_or(p0);
+            v.push(p2.array[0] as f32);
+            v.push(p2.array[1] as f32);
+        }
+
+        js_sys::Float32Array::from(&v[..])
+    }
 }
 
 #[wasm_bindgen]
