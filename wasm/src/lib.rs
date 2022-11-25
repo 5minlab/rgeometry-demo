@@ -210,7 +210,6 @@ impl Triangulated {
                     v.push(i as u16);
                     v.push(j as u16);
                 }
-                //
             }
         }
 
@@ -238,6 +237,81 @@ impl Triangulated {
         }
 
         js_sys::Float32Array::from(&v[..])
+    }
+}
+
+#[wasm_bindgen]
+pub struct Connectivity {
+    points: Vec<Point<f64>>,
+    connects: Vec<(usize, usize)>,
+}
+
+#[wasm_bindgen]
+impl Connectivity {
+    pub fn from(t: &Triangulated, coords: &[f64]) -> Self {
+        let mut points = Vec::with_capacity(coords.len() / 2);
+        for i in 0..coords.len() / 2 {
+            let x = coords[i * 2];
+            let y = coords[i * 2 + 1];
+            points.push(Point::new([x, y]));
+        }
+
+        let mut connects = Vec::new();
+        for i in 0..points.len() {
+            let p0 = &points[i];
+            let vis = t.net.visibility(&t.constraints, p0);
+            if vis.is_empty() {
+                continue;
+            }
+
+            for j in (i + 1)..points.len() {
+                let p1 = &points[j];
+
+                if core::visibility::point_visible(p0, &vis, p1) {
+                    connects.push((i, j));
+                    connects.push((j, i));
+                }
+            }
+        }
+
+        connects.sort();
+
+        Self { points, connects }
+    }
+
+    pub fn connectivity(&self) -> js_sys::Uint16Array {
+        let mut v = Vec::with_capacity(self.connects.len());
+
+        for (i, j) in &self.connects {
+            if j > i {
+                continue;
+            }
+
+            v.push(*i as u16);
+            v.push(*j as u16);
+        }
+
+        js_sys::Uint16Array::from(&v[..])
+    }
+
+    pub fn reachables(&self, t: &Triangulated, x: f64, y: f64) -> js_sys::Uint16Array {
+        let mut v = Vec::new();
+        let p0 = Point::new([x, y]);
+
+        let vis = t.net.visibility(&t.constraints, &Point::new([x, y]));
+
+        if vis.is_empty() {
+            return js_sys::Uint16Array::from(&v[..]);
+        }
+
+        for i in 0..self.points.len() {
+            let p1 = &self.points[i];
+            if visibility::point_visible(&p0, &vis, p1) {
+                v.push(i as u16);
+            }
+        }
+
+        js_sys::Uint16Array::from(&v[..])
     }
 }
 
