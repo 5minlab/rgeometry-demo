@@ -300,10 +300,17 @@ impl Visibility {
         let mut v = Vec::with_capacity(coords.len() * 2);
 
         let p0 = &self.origin;
+        let [ox, oy] = p0.array;
 
         for i in 0..coords.len() / 2 {
-            let x = coords[i * 2] + p0.array[0];
-            let y = coords[i * 2 + 1] + p0.array[1];
+            if self.vis.is_empty() {
+                v.push(ox as f32);
+                v.push(oy as f32);
+                continue;
+            }
+
+            let x = coords[i * 2] + ox;
+            let y = coords[i * 2 + 1] + oy;
             let p1 = Point::new([x, y]);
 
             let p2 = core::visibility::raycast(p0, &self.vis, &p1).unwrap_or_else(|| p0.clone());
