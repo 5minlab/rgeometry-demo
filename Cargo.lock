@@ -155,6 +155,7 @@ name = "asm"
 version = "0.1.0"
 dependencies = [
  "core",
+ "indexmap",
  "js-sys",
  "rgeometry",
  "wasm-bindgen",

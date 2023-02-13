@@ -96,6 +96,58 @@ impl Simplical {
 }
 
 #[wasm_bindgen]
+pub struct Delaunay {
+    net: TriangularNetwork<f64>,
+}
+
+#[wasm_bindgen]
+impl Delaunay {
+    pub fn from(coords: &[f64]) -> Self {
+        let mut view = 0f64;
+        let mut points = Vec::with_capacity(coords.len() / 2);
+        for i in 0..coords.len() / 2 {
+            let x = coords[i * 2];
+            let y = coords[i * 2 + 1];
+            view = view.max(x.max(y));
+            points.push(Point::new([x, y]));
+        }
+
+        let v = view * 4.0;
+        let mut net = TriangularNetwork::new(
+            Point::new([-v, -v]),
+            Point::new([v, -v]),
+            Point::new([0.0, v]),
+        );
+
+        let mut reductions = std::usize::MAX;
+        let mut indices = indexmap::IndexSet::new();
+        for p in &points {
+            let idx = net.insert(p, &mut reductions).unwrap();
+            assert!(indices.insert(idx));
+        }
+
+        Self { net }
+    }
+
+    pub fn neighbors(&self) -> js_sys::Uint16Array {
+        let mut v = Vec::with_capacity(self.net.triangles.len() * 6);
+        for tri in &self.net.triangles {
+            for i in 0..3 {
+                let v0 = tri.vertices[i];
+                let v1 = tri.vertices[(i + 1) % 3];
+                if v0.is_super() || v1.is_super() {
+                    continue;
+                }
+
+                v.push(v0.0 as u16 - 3);
+                v.push(v1.0 as u16 - 3);
+            }
+        }
+        js_sys::Uint16Array::from(&v[..])
+    }
+}
+
+#[wasm_bindgen]
 pub struct Triangulated {
     net: TriangularNetwork<f64>,
     constraints: Vec<(VertIdx, VertIdx)>,
@@ -189,7 +241,7 @@ impl Triangulated {
     pub fn connectivity(&self, coords: &[f64]) -> js_sys::Uint16Array {
         let mut v = Vec::new();
 
-        let mut points = Vec::new();
+        let mut points = Vec::with_capacity(coords.len() / 2);
         for i in 0..coords.len() / 2 {
             let x = coords[i * 2];
             let y = coords[i * 2 + 1];

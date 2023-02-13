@@ -1,7 +1,7 @@
 // https://www.personal.psu.edu/cxc11/AERSP560/DELAUNEY/13_Two_algorithms_Delauney.pdf
 use rgeometry::{data::*, Orientation, PolygonScalar};
 
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Hash)]
 pub struct TriIdx(pub usize);
 impl std::fmt::Debug for TriIdx {
     fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -9,7 +9,7 @@ impl std::fmt::Debug for TriIdx {
     }
 }
 
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Hash)]
 pub struct VertIdx(pub usize);
 impl std::fmt::Debug for VertIdx {
     fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
