@@ -348,6 +348,31 @@ impl Visibility {
         }
     }
 
+    pub fn visible(&self, coords: &[f64]) -> js_sys::Uint8Array {
+        let mut v = Vec::with_capacity(coords.len() * 2);
+
+        let p0 = &self.origin;
+
+        for i in 0..coords.len() / 2 {
+            if self.vis.is_empty() {
+                v.push(0);
+                continue;
+            }
+
+            let x = coords[i * 2];
+            let y = coords[i * 2 + 1];
+            let p1 = Point::new([x, y]);
+
+            v.push(if core::visibility::point_visible(p0, &self.vis, &p1) {
+                1
+            } else {
+                0
+            });
+        }
+
+        js_sys::Uint8Array::from(&v[..])
+    }
+
     pub fn raycast(&self, coords: &[f64]) -> js_sys::Float32Array {
         let mut v = Vec::with_capacity(coords.len() * 2);
 
