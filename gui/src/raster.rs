@@ -37,7 +37,7 @@ impl Demo for DemoRaster {
 
     fn ui(&mut self, _t: f64, ctx: &egui::Context, ui: &mut Ui) {
         let mut regen = false;
-        if ctx.input().key_pressed(Key::R) {
+        if ctx.input(|i| i.key_pressed(Key::R)) {
             regen = true;
         }
 

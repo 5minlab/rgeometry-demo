@@ -438,7 +438,7 @@ impl Demo for DemoGridNet {
     fn ui(&mut self, t: f64, ctx: &egui::Context, ui: &mut egui::Ui) {
         let mut rng = rand::thread_rng();
 
-        if ctx.input().key_released(Key::G) {
+        if ctx.input(|i| i.key_released(Key::G)) {
             self.rects = gen_rects(&mut rng, self.view, self.count);
         }
 

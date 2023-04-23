@@ -111,21 +111,21 @@ impl Default for MyApp {
 
 impl eframe::App for MyApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        if ctx.input().key_pressed(Key::Space) {
+        if ctx.input(|i| i.key_pressed(Key::Space)) {
             self.pause = !self.pause;
         }
-        if ctx.input().key_pressed(Key::R) {
+        if ctx.input(|i| i.key_pressed(Key::R)) {
             self.t = 0.0;
         }
-        if ctx.input().key_pressed(Key::A) {
+        if ctx.input(|i| i.key_pressed(Key::A)) {
             self.t -= 1.0 / 60.0;
         }
-        if ctx.input().key_pressed(Key::S) {
+        if ctx.input(|i| i.key_pressed(Key::S)) {
             self.t += 1.0 / 60.0;
         }
 
         if !self.pause {
-            self.t += ctx.input().predicted_dt as f64;
+            self.t += ctx.input(|i| i.predicted_dt) as f64;
             ctx.request_repaint();
         }
 

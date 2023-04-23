@@ -84,18 +84,18 @@ impl Demo for DemoDelaunay {
 
     fn ui(&mut self, _t: f64, ctx: &egui::Context, ui: &mut Ui) {
         let mut regen = false;
-        if ctx.input().key_pressed(Key::D) {
+        if ctx.input(|i| i.key_pressed(Key::D)) {
             regen = true;
         }
-        if ctx.input().key_pressed(Key::F) {
+        if ctx.input(|i| i.key_pressed(Key::F)) {
             self.opt_render_supertri = !self.opt_render_supertri;
         }
 
         let r = self.reductions;
-        if ctx.input().key_pressed(Key::C) && self.reductions < self.reductions_max {
+        if ctx.input(|i| i.key_pressed(Key::C)) && self.reductions < self.reductions_max {
             self.reductions += 1;
         }
-        if ctx.input().key_pressed(Key::X) && self.reductions > 0 {
+        if ctx.input(|i| i.key_pressed(Key::X)) && self.reductions > 0 {
             self.reductions -= 1;
         }
 

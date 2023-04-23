@@ -110,7 +110,7 @@ impl Demo for DemoBooleanTri {
         rand::thread_rng().fill(&mut seed);
         let mut rng = ChaCha20Rng::from_seed(seed);
 
-        if ctx.input().key_pressed(egui::Key::G) {
+        if ctx.input(|i| i.key_pressed(egui::Key::G)) {
             self.rects = gen_rects(&mut rng, self.view, self.rects.len());
         }
 
