@@ -173,14 +173,14 @@ impl Demo for DemoBooleanTri {
             }
         }
 
+        if self.opt_render_tri {
+            plot_net_inner(&self.sx, &self.net, plot_ui, self.opt_prune);
+        }
+
         if self.opt_render_union {
             for s in &self.sx.simplices {
                 plot_line(plot_ui, &[&s.src, &s.dst], Color32::BLUE);
             }
-        }
-
-        if self.opt_render_tri {
-            plot_net_inner(&self.sx, &self.net, plot_ui, self.opt_prune);
         }
 
         if self.opt_render_vis && !self.vis.is_empty() {
