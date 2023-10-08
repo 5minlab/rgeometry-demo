@@ -7,7 +7,7 @@ fn main() {
     tracing_subscriber::fmt::init();
 
     let options = eframe::NativeOptions::default();
-    eframe::run_native(
+    let _ = eframe::run_native(
         "rgeometry playground",
         options,
         Box::new(|_cc| Box::new(gui::MyApp::default())),

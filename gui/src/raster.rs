@@ -3,12 +3,8 @@ use core::raster::raster_bounds;
 use core::{points_tri, raster::raster, Rect};
 
 use super::{plot_line, plot_polygon, Demo};
-use eframe::egui::{
-    self,
-    epaint::Color32,
-    plot::{self, PlotPoint, PlotPoints, Polygon},
-    Key, Ui,
-};
+use eframe::egui::{self, epaint::Color32, Key, Ui};
+use egui_plot::{self, *};
 use rgeometry::data::Point;
 
 pub struct DemoRaster {
@@ -57,7 +53,7 @@ impl Demo for DemoRaster {
         }
     }
 
-    fn plot_ui(&self, plot_ui: &mut plot::PlotUi) {
+    fn plot_ui(&self, plot_ui: &mut PlotUi) {
         let m = self.grid_size as f64;
 
         let [ref p0, ref p1, ref p2] = self.verts;
@@ -80,7 +76,7 @@ impl Demo for DemoRaster {
                 PlotPoint::new(m * x + m, m * y + m),
                 PlotPoint::new(m * x + m, m * y),
             ]))
-            .color(Color32::WHITE);
+            .fill_color(Color32::WHITE);
             plot_ui.polygon(p);
         });
     }

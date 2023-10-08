@@ -1,12 +1,8 @@
 use super::{plot_line, plot_net, pt_egui, Demo};
 use core::delaunay::*;
 use core::{points_circular, points_grid, points_uniform};
-use eframe::egui::{
-    self,
-    epaint::Color32,
-    plot::{self, *},
-    Key, Ui,
-};
+use eframe::egui::{self, epaint::Color32, Key, Ui};
+use egui_plot::{self, *};
 use rgeometry::data::Point;
 
 fn gen_delaunay_points(view: f64, len: usize, square: bool) -> Vec<Point<f64>> {
@@ -149,7 +145,7 @@ impl Demo for DemoCDT {
             plot_line(plot_ui, &[p0, p1], Color32::RED);
         }
 
-        plot_ui.points(plot::Points::new(PlotPoints::Owned(
+        plot_ui.points(egui_plot::Points::new(PlotPoints::Owned(
             net.vertices.iter().skip(3).map(|v| pt_egui(v)).collect(),
         )));
     }

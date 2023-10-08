@@ -1,11 +1,7 @@
 use super::{plot_line, plot_net, pt_egui, Demo};
 use core::{delaunay::*, points_grid, points_uniform};
-use eframe::egui::{
-    self,
-    epaint::Color32,
-    plot::{self, *},
-    Key, Ui,
-};
+use eframe::egui::{self, epaint::Color32, Key, Ui};
+use egui_plot::{self, *};
 use rand::{thread_rng, Rng};
 use rgeometry::data::Point;
 
@@ -194,7 +190,7 @@ impl Demo for DemoDelaunay {
             */
         }
 
-        plot_ui.points(plot::Points::new(PlotPoints::Owned(
+        plot_ui.points(egui_plot::Points::new(PlotPoints::Owned(
             net.vertices.iter().skip(3).map(|v| pt_egui(v)).collect(),
         )));
     }

@@ -3,12 +3,8 @@ use std::collections::HashMap;
 use core::points_uniform;
 
 use super::{plot_line, pt_egui, Demo};
-use eframe::egui::{
-    self,
-    epaint::Color32,
-    plot::{self, PlotPoints},
-    Key, Ui,
-};
+use eframe::egui::{self, epaint::Color32, Key, Ui};
+use egui_plot::{self, *};
 use rgeometry::data::Point;
 
 fn gen_intersections(
@@ -117,7 +113,7 @@ impl Demo for DemoIntersections {
         }
     }
 
-    fn plot_ui(&self, plot_ui: &mut plot::PlotUi) {
+    fn plot_ui(&self, plot_ui: &mut PlotUi) {
         for (p0, p1) in &self.lines {
             plot_line(plot_ui, &[p0, p1], Color32::RED);
         }
@@ -128,7 +124,7 @@ impl Demo for DemoIntersections {
         }
 
         plot_ui.points(
-            plot::Points::new(PlotPoints::Owned(points))
+            egui_plot::Points::new(PlotPoints::Owned(points))
                 .color(Color32::BLUE)
                 .radius(2.0),
         );

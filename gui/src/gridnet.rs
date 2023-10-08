@@ -1,11 +1,7 @@
 use super::{p_rg_to_egui, plot_line, pt_egui, Demo};
 use core::{gen_rects, Rect};
-use eframe::egui::{
-    self,
-    epaint::Color32,
-    plot::{self, *},
-    Key,
-};
+use eframe::egui::{self, epaint::Color32, Key};
+use egui_plot::{self, *};
 use rgeometry::data::{DirectedEdge, Point, PointLocation, Polygon, Vector};
 use rgeometry::Intersects;
 use std::f64::consts::SQRT_2;
@@ -368,23 +364,24 @@ impl EguiRect {
         let bb_pe = p_rg_to_egui(&bb_p);
 
         if opts.render_polygon {
-            plot_ui.polygon(pe.color(Color32::RED));
+            plot_ui.polygon(pe.fill_color(Color32::RED));
         }
         if opts.render_bb {
-            plot_ui.polygon(bb_pe.color(Color32::BLUE));
+            plot_ui.polygon(bb_pe.fill_color(Color32::BLUE));
         }
 
         if opts.render_points {
             plot_ui.points(
-                plot::Points::new(PlotPoints::Owned(self.points.clone()))
+                egui_plot::Points::new(PlotPoints::Owned(self.points.clone()))
                     .color(Color32::LIGHT_BLUE),
             );
             plot_ui.points(
-                plot::Points::new(PlotPoints::Owned(self.p_points.clone()))
+                egui_plot::Points::new(PlotPoints::Owned(self.p_points.clone()))
                     .color(Color32::LIGHT_RED),
             );
             plot_ui.points(
-                plot::Points::new(PlotPoints::Owned(self.pe_points.clone())).color(Color32::GREEN),
+                egui_plot::Points::new(PlotPoints::Owned(self.pe_points.clone()))
+                    .color(Color32::GREEN),
             );
         }
 

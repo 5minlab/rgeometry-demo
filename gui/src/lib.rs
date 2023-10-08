@@ -1,13 +1,10 @@
 use core::delaunay::{TriIdx, TriangularNetwork};
 
 use eframe::{
-    egui::{
-        self,
-        plot::{self, Legend, Plot, PlotPoint, PlotPoints, PlotUi},
-        Key,
-    },
+    egui::{self, Key},
     epaint::Color32,
 };
+use egui_plot::{self, *};
 use rgeometry::data::{Point, Polygon};
 
 mod boolean;
@@ -21,13 +18,13 @@ mod raster;
 
 pub fn plot_line(plot_ui: &mut PlotUi, points: &[&Point<f64>], color: Color32) {
     let e_points = points.iter().map(|p| pt_egui(p)).collect();
-    plot_ui.line(plot::Line::new(PlotPoints::Owned(e_points)).color(color));
+    plot_ui.line(egui_plot::Line::new(PlotPoints::Owned(e_points)).color(color));
 }
 
 pub fn plot_polygon(plot_ui: &mut PlotUi, p: &Polygon<f64>, color: Color32) {
     for edge in p.iter_boundary_edges() {
         let e_points = vec![pt_egui(edge.src), pt_egui(edge.dst)];
-        plot_ui.line(plot::Line::new(PlotPoints::Owned(e_points)).color(color));
+        plot_ui.line(egui_plot::Line::new(PlotPoints::Owned(e_points)).color(color));
     }
 }
 
@@ -47,17 +44,17 @@ fn plot_net(net: &TriangularNetwork<f64>, plot_ui: &mut PlotUi, render_supertri:
             let center = net.centroid(TriIdx(_t_idx));
             let label = format!("{:?}={:?}", _t_idx, t);
 
-            plot_ui.text(plot::Text::new(pt_egui(&center), label));
+            plot_ui.text(egui_plot::Text::new(pt_egui(&center), label));
         }
     }
 }
 
-fn p_rg_to_egui(p: &Polygon<f64>) -> plot::Polygon {
+fn p_rg_to_egui(p: &Polygon<f64>) -> egui_plot::Polygon {
     let points: Vec<[f64; 2]> = p
         .iter()
         .map(|p| [p.array[0] as f64, p.array[1] as f64])
         .collect::<Vec<_>>();
-    plot::Polygon::new(points)
+    egui_plot::Polygon::new(points)
 }
 
 pub fn pt_egui(p: &Point<f64>) -> PlotPoint {
@@ -184,7 +181,7 @@ impl eframe::App for MyApp {
 
                 let area = view;
                 plot_ui.points(
-                    plot::Points::new(PlotPoints::Owned(vec![
+                    egui_plot::Points::new(PlotPoints::Owned(vec![
                         PlotPoint::new(-area, -area),
                         PlotPoint::new(area, -area),
                         PlotPoint::new(-area, area),

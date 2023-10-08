@@ -5,12 +5,8 @@ use core::{
     delaunay::{TriIdx, TriangularNetwork, VertIdx},
     gen_rects, points_uniform, visibility_limit, Rect,
 };
-use eframe::egui::{
-    self,
-    epaint::Color32,
-    plot::{PlotPoints, PlotUi},
-    Ui,
-};
+use eframe::egui::{self, epaint::Color32, Ui};
+use egui_plot::{self, *};
 use rgeometry::data::Point;
 
 fn rect_union(rects: &[Rect]) -> SimplicalChain<f64> {
@@ -169,7 +165,7 @@ impl Demo for DemoBooleanTri {
                 let p = r.polygon(1);
                 let pe = p_rg_to_egui(&p);
 
-                plot_ui.polygon(pe.color(Color32::RED));
+                plot_ui.polygon(pe.fill_color(Color32::RED));
             }
         }
 
@@ -205,13 +201,13 @@ impl Demo for DemoBooleanTri {
         }
 
         plot_ui.points(
-            egui::plot::Points::new(PlotPoints::Owned(points))
+            egui_plot::Points::new(PlotPoints::Owned(points))
                 .color(Color32::RED)
                 .radius(2.0),
         );
 
         plot_ui.points(
-            egui::plot::Points::new(PlotPoints::Owned(points_visibles))
+            egui_plot::Points::new(PlotPoints::Owned(points_visibles))
                 .color(Color32::LIGHT_BLUE)
                 .radius(2.0),
         );

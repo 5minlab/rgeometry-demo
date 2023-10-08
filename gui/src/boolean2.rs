@@ -1,7 +1,8 @@
 use super::{p_rg_to_egui, plot_line, pt_egui, Demo};
 use core::boolean::*;
 use core::{gen_rects, points_circular, Rect};
-use eframe::egui::{self, epaint::Color32, plot::*, Ui};
+use eframe::egui::{self, epaint::Color32, Ui};
+use egui_plot::{self, *};
 use rgeometry::data::{Point, Polygon};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -298,7 +299,7 @@ impl Demo for DemoBoolean2 {
                 let p = r.polygon(1);
                 let pe = p_rg_to_egui(&p);
 
-                plot_ui.polygon(pe.color(Color32::RED));
+                plot_ui.polygon(pe.fill_color(Color32::RED));
             }
         }
 
@@ -307,7 +308,7 @@ impl Demo for DemoBoolean2 {
                 plot_line(plot_ui, &[&s.src, &s.dst], Color32::GREEN);
 
                 plot_ui.points(
-                    egui::plot::Points::new(PlotPoints::Owned(vec![
+                    egui_plot::Points::new(PlotPoints::Owned(vec![
                         pt_egui(&s.src),
                         pt_egui(&s.dst),
                     ]))
