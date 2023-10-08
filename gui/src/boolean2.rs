@@ -200,22 +200,23 @@ fn rect_union(rects: &[Rect], subdivide: usize, rational: bool) -> SimplicalChai
     }
 }
 
-fn get_rects(shake: bool) -> Vec<Rect> {
+fn get_rects() -> Vec<Rect> {
     let rects = RECTS
         .iter()
-        .map(|[x, y, w, h, heading]| {
-            let (x, y) = if shake {
-                let half = 1e-6;
-                (
-                    *x + (rand::random::<f64>() - 0.5) * half,
-                    *y + (rand::random::<f64>() - 0.5) * half,
-                )
-            } else {
-                (*x, *y)
-            };
-            Rect::new(*w, *h).pos(x, y).rot(*heading)
-        })
+        .map(|[x, y, w, h, heading]| Rect::new(*w, *h).pos(*x, *y).rot(*heading))
         .collect::<Vec<_>>();
+    rects
+}
+
+fn maybe_shake(rects: &[Rect], shake: bool) -> Vec<Rect> {
+    let half = 1e-6;
+    let mut rects = rects.iter().cloned().collect::<Vec<_>>();
+    if shake {
+        for r in &mut rects {
+            r.pos[0] += (rand::random::<f64>() - 0.5) * half;
+            r.pos[1] += (rand::random::<f64>() - 0.5) * half;
+        }
+    }
     rects
 }
 
@@ -228,8 +229,8 @@ impl DemoBoolean2 {
         let rational = false;
         let subdivide = 1;
 
-        let rects = get_rects(shake);
-        let sx = rect_union(&rects, subdivide, rational);
+        let rects = get_rects();
+        let sx = rect_union(&maybe_shake(&rects, shake), subdivide, rational);
 
         Self {
             opt_render_rect: true,
@@ -281,13 +282,18 @@ impl Demo for DemoBoolean2 {
             ui.checkbox(&mut self.opt_render_union, "render union");
 
             ui.checkbox(&mut self.rational, "rational");
+            ui.checkbox(&mut self.shake, "shake");
             ui.separator();
 
             ui.add(egui::Slider::new(&mut self.count, 0..=self.rects.len()).text("counts"));
             ui.add(egui::Slider::new(&mut self.subdivide, 1..=10).text("subdivide"));
         });
 
-        self.sx = rect_union(&self.rects[..self.count], self.subdivide, self.rational);
+        self.sx = rect_union(
+            &maybe_shake(&self.rects[..self.count], self.shake),
+            self.subdivide,
+            self.rational,
+        );
 
         if self.opt_circle_mode == CircleMode::Disabled {
             return;
