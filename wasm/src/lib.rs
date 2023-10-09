@@ -162,80 +162,10 @@ impl Triangulated {
         triangulated
     }
 
-    pub fn visibility(&self, x: f64, y: f64) -> Visibility {
+    pub fn visibility(&self, x: f64, y: f64, out_to_in: bool) -> Visibility {
         let origin = Point::new([x, y]);
-        let vis = self.net.visibility(&self.constraints, &origin);
+        let vis = self.net.visibility_dir(&self.constraints, &origin, out_to_in);
         Visibility { origin, vis }
-    }
-
-    pub fn visibility_limit(&self, x: f64, y: f64, limit: f64) -> Visibility {
-        let origin = Point::new([x, y]);
-        let mut vis = self.net.visibility(&self.constraints, &origin);
-        core::visibility_limit(&mut vis, &origin, limit);
-        Visibility { origin, vis }
-    }
-
-    pub fn visibility_limit_fill(
-        &self,
-        x: f64,
-        y: f64,
-        limit: f64,
-        gridinfo: &[f64],
-        grid: js_sys::Uint8Array,
-    ) -> VisibilityResult {
-        let p = Point::new([x, y]);
-        let mut vis = self.net.visibility(&self.constraints, &p);
-        core::visibility_limit(&mut vis, &p, limit);
-        let mut count = 0;
-
-        if let [minx, miny, width, height, gridsize] = gridinfo {
-            let grid_count_x = (width / gridsize) as usize;
-            let grid_count_y = (height / gridsize) as usize;
-            let l = grid_count_x * grid_count_y;
-            let mut v = Vec::with_capacity(l);
-            v.resize(l, 0.0f32);
-
-            // find bounding box
-            let mut aabb: Option<AABB<f64>> = None;
-            for (p0, p1) in &vis {
-                let aabb_other =
-                    core::raster::raster_bounds(*gridsize as usize, &[p, p1.clone(), p0.clone()]);
-                aabb = match aabb {
-                    Some(mut aabb) => {
-                        aabb.extend_aabb(&aabb_other);
-                        Some(aabb)
-                    }
-                    None => Some(aabb_other),
-                }
-            }
-
-            let aabb = aabb.unwrap_or(AABB::new(&Point::new([*minx, *miny])));
-
-            for (p0, p1) in vis {
-                core::raster::raster(*gridsize as usize, &[p, p1, p0], |x, y| {
-                    let x = x - minx / gridsize;
-                    let y = y - miny / gridsize;
-                    if x < 0.0 || y < 0.0 {
-                        return;
-                    }
-                    count += 1;
-                    let x = x as usize;
-                    let y = y as usize;
-                    let idx = (y * grid_count_x + x) as u32;
-                    grid.set_index(idx, 1);
-                })
-            }
-
-            VisibilityResult {
-                min_x: (aabb.min.array[0] - minx / gridsize).max(0.0),
-                min_y: (aabb.min.array[1] - miny / gridsize).max(0.0),
-                max_x: (aabb.max.array[0] - minx / gridsize).min(grid_count_x as f64),
-                max_y: (aabb.max.array[1] - miny / gridsize).min(grid_count_y as f64),
-                count,
-            }
-        } else {
-            todo!();
-        }
     }
 
     pub fn connectivity(&self, coords: &[f64]) -> js_sys::Uint16Array {
@@ -277,6 +207,10 @@ pub struct Visibility {
 
 #[wasm_bindgen]
 impl Visibility {
+    pub fn limit(&mut self, limit: f64) {
+        core::visibility_limit(&mut self.vis, &self.origin, limit);
+    }
+
     pub fn serialize(&self) -> js_sys::Float32Array {
         let mut v = Vec::with_capacity(self.vis.len() * 4);
         for (from, to) in &self.vis {
