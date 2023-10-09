@@ -33,6 +33,9 @@ pub fn point_visible<T: PolygonScalar>(
     p: &Point<T>,
 ) -> bool {
     use Orientation::*;
+    if vis.len() == 0 {
+        return false;
+    }
 
     match visible_segment(origin, vis, p) {
         Some((p0, p1)) => {

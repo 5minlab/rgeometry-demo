@@ -993,11 +993,20 @@ impl<T: PolygonScalar> TriangularNetwork<T> {
         }
     }
 
-    // https://arxiv.org/abs/1403.3905
     pub fn visibility(
         &self,
         edges: &[(VertIdx, VertIdx)],
         p: &Point<T>,
+    ) -> Vec<(Point<T>, Point<T>)> {
+        self.visibility_dir(edges, p, false)
+    }
+
+    // https://arxiv.org/abs/1403.3905
+    pub fn visibility_dir(
+        &self,
+        edges: &[(VertIdx, VertIdx)],
+        p: &Point<T>,
+        out_to_in: bool,
     ) -> Vec<(Point<T>, Point<T>)> {
         use TriangularNetworkLocation::*;
 
@@ -1030,7 +1039,7 @@ impl<T: PolygonScalar> TriangularNetwork<T> {
 
         let mut out = Vec::new();
         for q in queries {
-            self.visibility_tri(edges, q, &mut out);
+            self.visibility_tri(edges, q, out_to_in, &mut out);
         }
 
         let mut pairs = Vec::with_capacity(out.len());
@@ -1069,9 +1078,9 @@ impl<T: PolygonScalar> TriangularNetwork<T> {
         &'a self,
         edges: &[(VertIdx, VertIdx)],
         q: VisibilityQuery<'a, 'b, T>,
+        out_to_in: bool,
         out: &mut Vec<VisibilitySegment<'a, T>>,
     ) -> usize {
-        let mut count = 1;
         let e = q.edge;
         use Orientation::*;
 
@@ -1082,21 +1091,31 @@ impl<T: PolygonScalar> TriangularNetwork<T> {
             .binary_search(&(self.edge_from(&e), self.edge_to(&e)))
             .is_ok()
         {
-            return count;
+            if out_to_in {
+                out.push(VisibilitySegment {
+                    edge: e,
+                    ccw: q.ccw,
+                    cw: q.cw,
+                });
+                return 1;
+            }
+            return 0;
         }
 
-        if edges
+        let in_to_out_found = edges
             .binary_search(&(self.edge_to(&e), self.edge_from(&e)))
-            .is_ok()
-        {
+            .is_ok();
+
+        if !out_to_in && in_to_out_found {
             out.push(VisibilitySegment {
                 edge: e,
                 ccw: q.ccw,
                 cw: q.cw,
             });
-            return count;
+            return 1;
         }
 
+        let mut count = 0;
         let v1 = self.tri_vert(e.tri, e.sub.ccw());
 
         let d_ccw_1 = Point::orient_along_direction(p, Direction::Through(q.ccw), v1);
@@ -1121,8 +1140,10 @@ impl<T: PolygonScalar> TriangularNetwork<T> {
                         ccw,
                         cw,
                     },
+                    out_to_in,
                     out,
                 );
+                // TODO: should check out_to_in
             }
         }
 
@@ -1145,9 +1166,19 @@ impl<T: PolygonScalar> TriangularNetwork<T> {
                         ccw,
                         cw,
                     },
+                    out_to_in,
                     out,
                 );
             }
+        }
+
+        if in_to_out_found && count == 0 {
+            out.push(VisibilitySegment {
+                edge: e,
+                ccw: q.ccw,
+                cw: q.cw,
+            });
+            return 1;
         }
 
         count

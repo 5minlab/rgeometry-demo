@@ -40,14 +40,29 @@ fn plot_net_inner(
     }
 }
 
+fn plot_vis(plot_ui: &mut PlotUi, vis: &[(Point<f64>, Point<f64>)], color: Color32) {
+    if vis.is_empty() {
+        return;
+    }
+
+    let mut last = &vis[vis.len() - 1].1;
+    for (p0, p1) in vis {
+        plot_line(plot_ui, &[last, p0], color);
+        plot_line(plot_ui, &[p0, p1], color);
+        last = p1;
+    }
+}
+
 pub struct DemoBooleanTri {
     opt_render_rect: bool,
     opt_render_union: bool,
     opt_render_tri: bool,
     opt_render_vis: bool,
+    opt_render_vis_dir: bool,
     opt_cut: bool,
     opt_prune: bool,
     opt_limit: bool,
+    opt_bound: bool,
 
     view: f64,
 
@@ -56,6 +71,7 @@ pub struct DemoBooleanTri {
     net: TriangularNetwork<f64>,
     constraints: Vec<(VertIdx, VertIdx)>,
     vis: Vec<(Point<f64>, Point<f64>)>,
+    vis_dir: Vec<(Point<f64>, Point<f64>)>,
 
     points: Vec<Point<f64>>,
 }
@@ -65,7 +81,11 @@ impl DemoBooleanTri {
     pub fn new(view: f64) -> Self {
         let mut rng = rand::thread_rng();
 
-        let rects = gen_rects(&mut rng, view, 100);
+        let opt_bound = true;
+
+        eprintln!("view: {:?}", view);
+        let mut rects = gen_rects(&mut rng, view, 100);
+
         let sx = rect_union(&rects);
         let opt_cut = true;
         let (net, constraints) = build_net(view, &sx, opt_cut);
@@ -75,9 +95,11 @@ impl DemoBooleanTri {
             opt_render_union: true,
             opt_render_tri: false,
             opt_render_vis: true,
+            opt_render_vis_dir: true,
             opt_cut,
             opt_prune: true,
             opt_limit: false,
+            opt_bound,
 
             view,
 
@@ -87,6 +109,7 @@ impl DemoBooleanTri {
             constraints,
 
             vis: Vec::new(),
+            vis_dir: Vec::new(),
 
             points: points_uniform(&mut rng, view, 100),
         }
@@ -120,10 +143,12 @@ impl Demo for DemoBooleanTri {
             ui.checkbox(&mut self.opt_render_union, "union");
             ui.checkbox(&mut self.opt_render_tri, "tri");
             ui.checkbox(&mut self.opt_render_vis, "vis");
+            ui.checkbox(&mut self.opt_render_vis_dir, "visdir");
             ui.checkbox(&mut self.opt_cut, "cut");
             ui.separator();
             ui.checkbox(&mut self.opt_prune, "prune");
             ui.checkbox(&mut self.opt_limit, "limit");
+            ui.checkbox(&mut self.opt_bound, "bound");
         });
 
         ui.horizontal(|ui| {
@@ -137,16 +162,27 @@ impl Demo for DemoBooleanTri {
             }
         });
 
-        for r in &mut self.rects {
+        let mut rects = self.rects.clone();
+        for r in &mut rects {
             r.rot = t;
         }
 
-        self.sx = rect_union(&self.rects);
+        if self.opt_bound {
+            let view = self.view;
+            let width = 1.0;
+            rects.push(Rect::new(view + width, width / 2.0).pos(0.0, view + width / 2.0));
+            rects.push(Rect::new(view + width, width / 2.0).pos(0.0, -view - width / 2.0));
+
+            rects.push(Rect::new(width / 2.0, view + width).pos(view + width / 2.0, 0.0));
+            rects.push(Rect::new(width / 2.0, view + width).pos(-view - width / 2.0, 0.0));
+        }
+
+        self.sx = rect_union(&rects);
         let (net, c) = build_net(self.view, &self.sx, self.opt_cut);
         self.net = net;
         self.constraints = c;
 
-        let vis = {
+        self.vis = {
             let pos = Point::new([0.0, 0.0]);
             let mut vis = self.net.visibility(&self.constraints, &pos);
 
@@ -156,7 +192,15 @@ impl Demo for DemoBooleanTri {
             vis
         };
 
-        self.vis = vis;
+        self.vis_dir = {
+            let pos = Point::new([0.0, 0.0]);
+            let mut vis = self.net.visibility_dir(&self.constraints, &pos, true);
+
+            if self.opt_limit {
+                visibility_limit(&mut vis, &pos, 15.0f64);
+            }
+            vis
+        };
     }
 
     fn plot_ui(&self, plot_ui: &mut PlotUi) {
@@ -179,13 +223,12 @@ impl Demo for DemoBooleanTri {
             }
         }
 
-        if self.opt_render_vis && !self.vis.is_empty() {
-            let mut last = &self.vis[self.vis.len() - 1].1;
-            for (p0, p1) in &self.vis {
-                plot_line(plot_ui, &[last, p0], Color32::YELLOW);
-                plot_line(plot_ui, &[p0, p1], Color32::YELLOW);
-                last = p1;
-            }
+        if self.opt_render_vis {
+            plot_vis(plot_ui, &self.vis, Color32::YELLOW);
+        }
+
+        if self.opt_render_vis_dir {
+            plot_vis(plot_ui, &self.vis_dir, Color32::LIGHT_YELLOW);
         }
 
         let mut points = Vec::new();
