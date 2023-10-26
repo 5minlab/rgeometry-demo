@@ -214,6 +214,18 @@ impl Visibility {
         core::visibility_limit(&mut self.vis, limit);
     }
 
+    pub fn clip(&mut self, points: &[f64]) {
+        if let [p0x, p0y, p1x, p1y] = points {
+            let p0 = Point::new([*p0x, *p0y]);
+            let p1 = Point::new([*p1x, *p1y]);
+
+            let d0 = rgeometry::data::Direction::Through(&p0);
+            let d1 = rgeometry::data::Direction::Through(&p1);
+
+            self.vis = self.vis.clip(d0, d1);
+        }
+    }
+
     pub fn serialize(&self) -> js_sys::Float32Array {
         let mut v = Vec::with_capacity(self.vis.pairs.len() * 4);
         for (from, to) in &self.vis.pairs {

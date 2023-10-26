@@ -47,11 +47,20 @@ fn plot_vis(plot_ui: &mut PlotUi, vis: &VisibilityResult<f64>, color: Color32) {
         return;
     }
 
-    let mut last = &vis.pairs[vis.pairs.len() - 1].1;
+    let mut last = if !vis.arc {
+        &vis.pairs[vis.pairs.len() - 1].1
+    } else {
+        &vis.origin
+    };
+
     for (p0, p1) in &vis.pairs {
         plot_line(plot_ui, &[last, p0], color);
         plot_line(plot_ui, &[p0, p1], color);
         last = p1;
+    }
+
+    if vis.arc {
+        plot_line(plot_ui, &[last, &vis.origin], color);
     }
 }
 
@@ -64,6 +73,7 @@ pub struct DemoBooleanTri {
     opt_cut: bool,
     opt_prune: bool,
     opt_limit: bool,
+    opt_clip: bool,
     opt_bound: bool,
 
     view: f64,
@@ -101,6 +111,7 @@ impl DemoBooleanTri {
             opt_cut,
             opt_prune: true,
             opt_limit: false,
+            opt_clip: false,
             opt_bound,
 
             view,
@@ -150,6 +161,7 @@ impl Demo for DemoBooleanTri {
             ui.separator();
             ui.checkbox(&mut self.opt_prune, "prune");
             ui.checkbox(&mut self.opt_limit, "limit");
+            ui.checkbox(&mut self.opt_clip, "clip");
             ui.checkbox(&mut self.opt_bound, "bound");
         });
 
@@ -187,6 +199,15 @@ impl Demo for DemoBooleanTri {
         self.vis = {
             let pos = Point::new([0.0, 0.0]);
             let mut vis = self.net.visibility(&self.constraints, &pos).unwrap();
+
+            if self.opt_clip {
+                let d0p = Point::new([1.0, 0.0]);
+                let d1p = Point::new([0.0, 1.0]);
+                let d0 = rgeometry::data::Direction::Through(&d0p);
+                let d1 = rgeometry::data::Direction::Through(&d1p);
+
+                vis = vis.clip(d0, d1);
+            }
 
             if self.opt_limit {
                 visibility_limit(&mut vis, 15.0f64);

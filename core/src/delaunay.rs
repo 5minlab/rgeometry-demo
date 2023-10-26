@@ -1064,6 +1064,7 @@ impl<T: PolygonScalar> TriangularNetwork<T> {
         Some(VisibilityResult {
             origin: p.clone(),
             pairs,
+            arc: false,
         })
     }
 
