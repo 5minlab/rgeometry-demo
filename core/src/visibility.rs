@@ -104,7 +104,7 @@ impl<T: PolygonScalar> VisibilityResult<T> {
         }
 
         i = i % self.pairs.len();
-        let end = i - 1;
+        let end = (i + self.pairs.len() + 1) % self.pairs.len();
         while i != end {
             let pair = self.pairs[i].clone();
             pairs.push(pair);
