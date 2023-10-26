@@ -164,8 +164,11 @@ impl Triangulated {
 
     pub fn visibility(&self, x: f64, y: f64, out_to_in: bool) -> Visibility {
         let origin = Point::new([x, y]);
-        let vis = self.net.visibility_dir(&self.constraints, &origin, out_to_in);
-        Visibility { origin, vis }
+        let vis = self
+            .net
+            .visibility_dir(&self.constraints, &origin, out_to_in)
+            .unwrap_or(visibility::VisibilityResult::empty(origin.clone()));
+        Visibility { vis }
     }
 
     pub fn connectivity(&self, coords: &[f64]) -> js_sys::Uint16Array {
@@ -181,14 +184,15 @@ impl Triangulated {
         for i in 0..points.len() {
             let p0 = &points[i];
             let vis = self.net.visibility(&self.constraints, p0);
-            if vis.is_empty() {
-                continue;
-            }
+            let vis = match vis {
+                Some(v) => v,
+                None => continue,
+            };
 
             for j in (i + 1)..points.len() {
                 let p1 = &points[j];
 
-                if core::visibility::point_visible(p0, &vis, p1) {
+                if vis.point_visible(p1) {
                     v.push(i as u16);
                     v.push(j as u16);
                 }
@@ -201,19 +205,18 @@ impl Triangulated {
 
 #[wasm_bindgen]
 pub struct Visibility {
-    origin: Point<f64>,
-    vis: Vec<(Point<f64>, Point<f64>)>,
+    vis: visibility::VisibilityResult<f64>,
 }
 
 #[wasm_bindgen]
 impl Visibility {
     pub fn limit(&mut self, limit: f64) {
-        core::visibility_limit(&mut self.vis, &self.origin, limit);
+        core::visibility_limit(&mut self.vis, limit);
     }
 
     pub fn serialize(&self) -> js_sys::Float32Array {
-        let mut v = Vec::with_capacity(self.vis.len() * 4);
-        for (from, to) in &self.vis {
+        let mut v = Vec::with_capacity(self.vis.pairs.len() * 4);
+        for (from, to) in &self.vis.pairs {
             v.push(from.array[0] as f32);
             v.push(from.array[1] as f32);
             v.push(to.array[0] as f32);
@@ -223,7 +226,7 @@ impl Visibility {
     }
 
     pub fn fill(&self, gridinfo: &[f64], grid: js_sys::Uint8Array) -> VisibilityResult {
-        let vis = &self.vis;
+        let vis = &self.vis.pairs;
         let mut count = 0;
 
         if let [minx, miny, width, height, gridsize] = gridinfo {
@@ -238,7 +241,7 @@ impl Visibility {
             for (p0, p1) in vis {
                 let aabb_other = core::raster::raster_bounds(
                     *gridsize as usize,
-                    &[self.origin.clone(), p1.clone(), p0.clone()],
+                    &[self.vis.origin.clone(), p1.clone(), p0.clone()],
                 );
                 aabb = match aabb {
                     Some(mut aabb) => {
@@ -254,7 +257,7 @@ impl Visibility {
             for (p0, p1) in vis {
                 core::raster::raster(
                     *gridsize as usize,
-                    &[self.origin.clone(), p1.clone(), p0.clone()],
+                    &[self.vis.origin.clone(), p1.clone(), p0.clone()],
                     |x, y| {
                         let x = x - minx / gridsize;
                         let y = y - miny / gridsize;
@@ -285,10 +288,8 @@ impl Visibility {
     pub fn visible(&self, coords: &[f64]) -> js_sys::Uint8Array {
         let mut v = Vec::with_capacity(coords.len() * 2);
 
-        let p0 = &self.origin;
-
         for i in 0..coords.len() / 2 {
-            if self.vis.is_empty() {
+            if self.vis.pairs.is_empty() {
                 v.push(0);
                 continue;
             }
@@ -297,11 +298,7 @@ impl Visibility {
             let y = coords[i * 2 + 1];
             let p1 = Point::new([x, y]);
 
-            v.push(if core::visibility::point_visible(p0, &self.vis, &p1) {
-                1
-            } else {
-                0
-            });
+            v.push(if self.vis.point_visible(&p1) { 1 } else { 0 });
         }
 
         js_sys::Uint8Array::from(&v[..])
@@ -310,11 +307,11 @@ impl Visibility {
     pub fn raycast(&self, coords: &[f64]) -> js_sys::Float32Array {
         let mut v = Vec::with_capacity(coords.len() * 2);
 
-        let p0 = &self.origin;
+        let p0 = &self.vis.origin;
         let [ox, oy] = p0.array;
 
         for i in 0..coords.len() / 2 {
-            if self.vis.is_empty() {
+            if self.vis.pairs.is_empty() {
                 v.push(ox as f32);
                 v.push(oy as f32);
                 continue;
@@ -324,7 +321,7 @@ impl Visibility {
             let y = coords[i * 2 + 1] + oy;
             let p1 = Point::new([x, y]);
 
-            let p2 = core::visibility::raycast(p0, &self.vis, &p1).unwrap_or_else(|| p0.clone());
+            let p2 = self.vis.raycast(&p1).unwrap_or_else(|| p0.clone());
             v.push(p2.array[0] as f32);
             v.push(p2.array[1] as f32);
         }
@@ -353,14 +350,15 @@ impl Connectivity {
         for i in 0..points.len() {
             let p0 = &points[i];
             let vis = t.net.visibility(&t.constraints, p0);
-            if vis.is_empty() {
-                continue;
-            }
+            let vis = match vis {
+                Some(v) => v,
+                None => continue,
+            };
 
             for j in (i + 1)..points.len() {
                 let p1 = &points[j];
 
-                if core::visibility::point_visible(p0, &vis, p1) {
+                if vis.point_visible(p1) {
                     connects.push((i, j));
                     connects.push((j, i));
                 }
@@ -391,15 +389,20 @@ impl Connectivity {
         let mut v = Vec::new();
         let p0 = Point::new([x, y]);
 
-        let vis = t.net.visibility(&t.constraints, &Point::new([x, y]));
+        let vis = match t.net.visibility(&t.constraints, &p0) {
+            Some(v) => v,
+            None => {
+                return js_sys::Uint16Array::from(&v[..]);
+            }
+        };
 
-        if vis.is_empty() {
+        if vis.pairs.is_empty() {
             return js_sys::Uint16Array::from(&v[..]);
         }
 
         for i in 0..self.points.len() {
             let p1 = &self.points[i];
-            if visibility::point_visible(&p0, &vis, p1) {
+            if vis.point_visible(p1) {
                 v.push(i as u16);
             }
         }

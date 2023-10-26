@@ -1,4 +1,5 @@
 // https://www.personal.psu.edu/cxc11/AERSP560/DELAUNEY/13_Two_algorithms_Delauney.pdf
+use crate::visibility::VisibilityResult;
 use rgeometry::{data::*, Orientation, PolygonScalar};
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Hash)]
@@ -997,7 +998,7 @@ impl<T: PolygonScalar> TriangularNetwork<T> {
         &self,
         edges: &[(VertIdx, VertIdx)],
         p: &Point<T>,
-    ) -> Vec<(Point<T>, Point<T>)> {
+    ) -> Option<VisibilityResult<T>> {
         self.visibility_dir(edges, p, false)
     }
 
@@ -1007,7 +1008,7 @@ impl<T: PolygonScalar> TriangularNetwork<T> {
         edges: &[(VertIdx, VertIdx)],
         p: &Point<T>,
         out_to_in: bool,
-    ) -> Vec<(Point<T>, Point<T>)> {
+    ) -> Option<VisibilityResult<T>> {
         use TriangularNetworkLocation::*;
 
         if let Err(e) = self.check_invariant("visibility") {
@@ -1034,7 +1035,7 @@ impl<T: PolygonScalar> TriangularNetwork<T> {
                 }
                 queries
             }
-            _ => return vec![],
+            _ => return None,
         };
 
         let mut out = Vec::new();
@@ -1060,7 +1061,10 @@ impl<T: PolygonScalar> TriangularNetwork<T> {
             }
         }
 
-        pairs
+        Some(VisibilityResult {
+            origin: p.clone(),
+            pairs,
+        })
     }
 
     pub fn centroid(&self, tri: TriIdx) -> Point<T> {

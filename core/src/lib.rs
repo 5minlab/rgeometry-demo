@@ -9,25 +9,26 @@ use boolean::*;
 use delaunay::*;
 use rand::prelude::*;
 use rgeometry::data::*;
+use visibility::*;
 
-pub fn visibility_limit(vis: &mut Vec<(Point<f64>, Point<f64>)>, center: &Point<f64>, limit: f64) {
+pub fn visibility_limit(vis: &mut VisibilityResult<f64>, limit: f64) {
     let limit_sq = limit * limit;
 
-    for i in 0..vis.len() {
-        let (ref mut p0, ref mut p1) = vis[i];
+    for i in 0..vis.pairs.len() {
+        let (ref mut p0, ref mut p1) = &mut vis.pairs[i];
 
-        let dist: f64 = p0.squared_euclidean_distance(center);
+        let dist: f64 = p0.squared_euclidean_distance(&vis.origin);
         if dist > limit_sq {
             let ratio = (limit_sq / dist).sqrt();
-            let v = *p0 - *center;
-            *p0 = *center + v * ratio;
+            let v = *p0 - vis.origin;
+            *p0 = vis.origin + v * ratio;
         }
 
-        let dist: f64 = p1.squared_euclidean_distance(center);
+        let dist: f64 = p1.squared_euclidean_distance(&vis.origin);
         if dist > limit_sq {
             let ratio = (limit_sq / dist).sqrt();
-            let v = *p1 - *center;
-            *p1 = *center + v * ratio;
+            let v = *p1 - vis.origin;
+            *p1 = vis.origin + v * ratio;
         }
     }
 }

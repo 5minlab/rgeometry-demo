@@ -1,62 +1,69 @@
 use rgeometry::{data::*, Orientation, PolygonScalar};
 
-pub fn visible_segment<'a, 'b, T: PolygonScalar>(
-    origin: &'a Point<T>,
-    vis: &'b [(Point<T>, Point<T>)],
-    p: &'a Point<T>,
-) -> Option<(&'b Point<T>, &'b Point<T>)> {
-    use Orientation::*;
+pub struct VisibilityResult<T> {
+    pub origin: Point<T>,
+    pub pairs: Vec<(Point<T>, Point<T>)>,
+}
 
-    let mut directions = Vec::with_capacity(vis.len());
-    for (p0, _p1) in vis {
-        let d = Point::orient_along_direction(&origin, Direction::Through(p0), p);
-        directions.push(d);
+impl<T> VisibilityResult<T> {
+    pub fn empty(origin: Point<T>) -> Self {
+        Self {
+            origin,
+            pairs: vec![],
+        }
     }
-    directions.push(directions[0]);
+}
 
-    for i in 0..vis.len() {
-        let (ref p0, ref p1) = &vis[i];
+impl<T: PolygonScalar> VisibilityResult<T> {
+    pub fn visible_segment<'a, 'b>(
+        &'b self,
+        p: &'a Point<T>,
+    ) -> Option<(&'b Point<T>, &'b Point<T>)> {
+        use Orientation::*;
 
-        match (directions[i], directions[i + 1]) {
-            (CounterClockWise, ClockWise) => {
-                return Some((p0, p1));
+        let mut directions = Vec::with_capacity(self.pairs.len());
+        for (p0, _p1) in &self.pairs {
+            let d = Point::orient_along_direction(&self.origin, Direction::Through(p0), p);
+            directions.push(d);
+        }
+        directions.push(directions[0]);
+
+        for i in 0..self.pairs.len() {
+            let (ref p0, ref p1) = &self.pairs[i];
+
+            match (directions[i], directions[i + 1]) {
+                (CounterClockWise, ClockWise) => {
+                    return Some((p0, p1));
+                }
+                _ => continue,
             }
-            _ => continue,
         }
-    }
-    None
-}
-
-pub fn point_visible<T: PolygonScalar>(
-    origin: &Point<T>,
-    vis: &[(Point<T>, Point<T>)],
-    p: &Point<T>,
-) -> bool {
-    use Orientation::*;
-    if vis.len() == 0 {
-        return false;
+        None
     }
 
-    match visible_segment(origin, vis, p) {
-        Some((p0, p1)) => {
-            Point::orient_along_direction(p0, Direction::Through(p1), p) == CounterClockWise
+    pub fn point_visible(&self, p: &Point<T>) -> bool {
+        use Orientation::*;
+        if self.pairs.len() == 0 {
+            return false;
         }
-        None => false,
+
+        match self.visible_segment(p) {
+            Some((p0, p1)) => {
+                Point::orient_along_direction(p0, Direction::Through(p1), p) == CounterClockWise
+            }
+            None => false,
+        }
     }
-}
 
-pub fn raycast<T: PolygonScalar>(
-    origin: &Point<T>,
-    vis: &[(Point<T>, Point<T>)],
-    p: &Point<T>,
-) -> Option<Point<T>> {
-    match visible_segment(origin, vis, p) {
-        Some((p0, p1)) => {
-            let l0 = Line::new_through(origin, p);
-            let l1 = Line::new_through(p0, p1);
+    pub fn raycast(&self, p: &Point<T>) -> Option<Point<T>> {
+        match self.visible_segment(p) {
+            Some((p0, p1)) => {
+                let l0 = Line::new_through(&self.origin, p);
+                let l1 = Line::new_through(p0, p1);
 
-            return l0.intersection_point(&l1);
+                return l0.intersection_point(&l1);
+            }
+            None => None,
         }
-        None => None,
     }
 }

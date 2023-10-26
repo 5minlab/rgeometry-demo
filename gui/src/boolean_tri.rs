@@ -3,7 +3,9 @@ use core::{
     boolean::*,
     build_net,
     delaunay::{TriIdx, TriangularNetwork, VertIdx},
-    gen_rects, points_uniform, visibility_limit, Rect,
+    gen_rects, points_uniform,
+    visibility::VisibilityResult,
+    visibility_limit, Rect,
 };
 use eframe::egui::{self, epaint::Color32, Ui};
 use egui_plot::{self, *};
@@ -40,13 +42,13 @@ fn plot_net_inner(
     }
 }
 
-fn plot_vis(plot_ui: &mut PlotUi, vis: &[(Point<f64>, Point<f64>)], color: Color32) {
-    if vis.is_empty() {
+fn plot_vis(plot_ui: &mut PlotUi, vis: &VisibilityResult<f64>, color: Color32) {
+    if vis.pairs.is_empty() {
         return;
     }
 
-    let mut last = &vis[vis.len() - 1].1;
-    for (p0, p1) in vis {
+    let mut last = &vis.pairs[vis.pairs.len() - 1].1;
+    for (p0, p1) in &vis.pairs {
         plot_line(plot_ui, &[last, p0], color);
         plot_line(plot_ui, &[p0, p1], color);
         last = p1;
@@ -70,8 +72,8 @@ pub struct DemoBooleanTri {
     sx: SimplicalChain<f64>,
     net: TriangularNetwork<f64>,
     constraints: Vec<(VertIdx, VertIdx)>,
-    vis: Vec<(Point<f64>, Point<f64>)>,
-    vis_dir: Vec<(Point<f64>, Point<f64>)>,
+    vis: VisibilityResult<f64>,
+    vis_dir: VisibilityResult<f64>,
 
     points: Vec<Point<f64>>,
 }
@@ -108,8 +110,8 @@ impl DemoBooleanTri {
             net,
             constraints,
 
-            vis: Vec::new(),
-            vis_dir: Vec::new(),
+            vis: VisibilityResult::empty(Point::new([0.0, 0.0])),
+            vis_dir: VisibilityResult::empty(Point::new([0.0, 0.0])),
 
             points: points_uniform(&mut rng, view, 100),
         }
@@ -184,20 +186,23 @@ impl Demo for DemoBooleanTri {
 
         self.vis = {
             let pos = Point::new([0.0, 0.0]);
-            let mut vis = self.net.visibility(&self.constraints, &pos);
+            let mut vis = self.net.visibility(&self.constraints, &pos).unwrap();
 
             if self.opt_limit {
-                visibility_limit(&mut vis, &pos, 15.0f64);
+                visibility_limit(&mut vis, 15.0f64);
             }
             vis
         };
 
         self.vis_dir = {
             let pos = Point::new([0.0, 0.0]);
-            let mut vis = self.net.visibility_dir(&self.constraints, &pos, true);
+            let mut vis = self
+                .net
+                .visibility_dir(&self.constraints, &pos, true)
+                .unwrap();
 
             if self.opt_limit {
-                visibility_limit(&mut vis, &pos, 15.0f64);
+                visibility_limit(&mut vis, 15.0f64);
             }
             vis
         };
@@ -234,9 +239,8 @@ impl Demo for DemoBooleanTri {
         let mut points = Vec::new();
         let mut points_visibles = Vec::new();
 
-        let origin = Point::new([0.0, 0.0]);
         for p in &self.points {
-            if core::visibility::point_visible(&origin, &self.vis, p) {
+            if self.vis.point_visible(p) {
                 points_visibles.push(pt_egui(p));
             } else {
                 points.push(pt_egui(p));
