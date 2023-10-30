@@ -72,6 +72,9 @@ impl<T: PolygonScalar> VisibilityResult<T> {
 
     pub fn clip(&self, d0: Direction<T, 2>, d1: Direction<T, 2>) -> Self {
         use Orientation::*;
+        if self.pairs.is_empty() {
+            return self.clone();
+        }
 
         let mut pairs = vec![];
         let mut i = 0;
