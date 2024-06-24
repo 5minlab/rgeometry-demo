@@ -1,5 +1,21 @@
 use rgeometry::{data::*, Orientation, PolygonScalar};
 
+enum ClipTy<T> {
+    CounterClockWise(Point<T>, Point<T>),
+    In(Point<T>, Point<T>),
+    ClockWise(Point<T>, Point<T>),
+}
+
+impl<T> std::fmt::Debug for ClipTy<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ClipTy::CounterClockWise(_p0, _p1) => write!(f, "CCW"),
+            ClipTy::In(_p0, _p1) => write!(f, "IN"),
+            ClipTy::ClockWise(_p0, _p1) => write!(f, "CW"),
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct VisibilityResult<T> {
     pub origin: Point<T>,
@@ -76,76 +92,57 @@ impl<T: PolygonScalar> VisibilityResult<T> {
             return self.clone();
         }
 
+        let mut start = 0;
         let mut pairs = vec![];
-        let mut i = 0;
-        while i < self.pairs.len() {
-            let (ref p0, ref p1) = self.pairs[i];
-            i += 1;
-            let o0 = Point::orient_along_direction(&self.origin, d0, p0);
-            let o1 = Point::orient_along_direction(&self.origin, d0, p1);
+        for (p0, p1) in &self.pairs {
+            let d0p0 = Point::orient_along_direction(&self.origin, d0, p0);
+            let d1p0 = Point::orient_along_direction(&self.origin, d1, p0);
+            let d0p1 = Point::orient_along_direction(&self.origin, d0, p1);
+            let d1p1 = Point::orient_along_direction(&self.origin, d1, p1);
 
-            match (o0, o1) {
-                (ClockWise, CounterClockWise) => {
-                    let l0 = Line::new(&self.origin, d0);
-                    let l1 = Line::new_through(p0, p1);
+            let p0_in = d0p0 == CounterClockWise && d1p0 == ClockWise;
+            let p1_in = d0p1 == CounterClockWise && d1p1 == ClockWise;
 
-                    if let Some(p0) = l0.intersection_point(&l1) {
-                        pairs.push((p0, p1.clone()));
-                    }
-                    break;
+            if !p0_in && !p1_in {
+                continue;
+            }
+
+            if p0_in && p1_in {
+                pairs.push(ClipTy::In(p0.clone(), p1.clone()));
+            } else if p0_in {
+                let l0 = Line::new(&self.origin, d1);
+                let l1 = Line::new_through(p0, p1);
+
+                if let Some(p1) = l0.intersection_point(&l1) {
+                    pairs.push(ClipTy::ClockWise(p0.clone(), p1));
+                } else {
+                    pairs.push(ClipTy::ClockWise(p0.clone(), p1.clone()));
                 }
-                (CoLinear, CounterClockWise) => {
-                    pairs.push((p0.clone(), p1.clone()));
-                }
-                (ClockWise, CoLinear) => {
-                    break;
-                }
-                _ => {
-                    continue;
+            } else if p1_in {
+                start = pairs.len();
+
+                let l0 = Line::new(&self.origin, d0);
+                let l1 = Line::new_through(p0, p1);
+
+                if let Some(p0) = l0.intersection_point(&l1) {
+                    pairs.push(ClipTy::CounterClockWise(p0, p1.clone()));
+                } else {
+                    pairs.push(ClipTy::CounterClockWise(p0.clone(), p1.clone()));
                 }
             }
         }
-
-        i = i % self.pairs.len();
-        let end = (i + self.pairs.len() + 1) % self.pairs.len();
-        while i != end {
-            let pair = self.pairs[i].clone();
-            pairs.push(pair);
-            i = (i + 1) % self.pairs.len();
-        }
-
-        let mut pairs1 = vec![];
-
-        for (p0, p1) in pairs {
-            let o0 = Point::orient_along_direction(&self.origin, d1, &p0);
-            let o1 = Point::orient_along_direction(&self.origin, d1, &p1);
-
-            match (o0, o1) {
-                (ClockWise, CounterClockWise) => {
-                    let l0 = Line::new(&self.origin, d1);
-                    let l1 = Line::new_through(&p0, &p1);
-
-                    if let Some(p1) = l0.intersection_point(&l1) {
-                        pairs1.push((p0, p1));
-                    }
-                    break;
-                }
-                (CoLinear, CounterClockWise) => {
-                    break;
-                }
-                (ClockWise, CoLinear) => {
-                    pairs1.push((p0, p1));
-                    break;
-                }
-                _ => {
-                    pairs1.push((p0, p1));
-                }
-            }
-        }
+        pairs.rotate_left(start);
 
         VisibilityResult {
             origin: self.origin.clone(),
-            pairs: pairs1,
+            pairs: pairs
+                .into_iter()
+                .map(|p| match p {
+                    ClipTy::CounterClockWise(p0, p1) => (p0, p1),
+                    ClipTy::In(p0, p1) => (p0, p1),
+                    ClipTy::ClockWise(p0, p1) => (p0, p1),
+                })
+                .collect(),
             arc: true,
         }
     }

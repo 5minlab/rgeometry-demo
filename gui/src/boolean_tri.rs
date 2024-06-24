@@ -70,6 +70,7 @@ pub struct DemoBooleanTri {
     opt_render_tri: bool,
     opt_render_vis: bool,
     opt_render_vis_dir: bool,
+
     opt_cut: bool,
     opt_prune: bool,
     opt_limit: bool,
@@ -107,11 +108,12 @@ impl DemoBooleanTri {
             opt_render_union: true,
             opt_render_tri: false,
             opt_render_vis: true,
-            opt_render_vis_dir: true,
+            opt_render_vis_dir: false,
+
             opt_cut,
             opt_prune: true,
             opt_limit: false,
-            opt_clip: false,
+            opt_clip: true,
             opt_bound,
 
             view,
@@ -201,8 +203,14 @@ impl Demo for DemoBooleanTri {
             let mut vis = self.net.visibility(&self.constraints, &pos).unwrap();
 
             if self.opt_clip {
-                let d0p = Point::new([1.0, 0.0]);
-                let d1p = Point::new([0.0, 1.0]);
+                let dir = t * 0.2;
+                let var = 0.4;
+
+                let dirmin = dir - var;
+                let dirmax = dir + var;
+
+                let d0p = Point::new([dirmin.cos(), dirmin.sin()]);
+                let d1p = Point::new([dirmax.cos(), dirmax.sin()]);
                 let d0 = rgeometry::data::Direction::Through(&d0p);
                 let d1 = rgeometry::data::Direction::Through(&d1p);
 
@@ -212,6 +220,7 @@ impl Demo for DemoBooleanTri {
             if self.opt_limit {
                 visibility_limit(&mut vis, 15.0f64);
             }
+
             vis
         };
 
