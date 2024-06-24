@@ -20,6 +20,12 @@ pub struct Simplical {
 }
 
 #[wasm_bindgen]
+pub enum FillOp {
+    Add,
+    Subtract,
+}
+
+#[wasm_bindgen]
 impl Simplical {
     pub fn new() -> Self {
         Self {
@@ -237,6 +243,47 @@ impl Visibility {
         js_sys::Float32Array::from(&v[..])
     }
 
+    pub fn fill_op(&self, gridinfo: &[f64], grid: &mut [f32], op: FillOp, amount: f32) -> usize {
+        let vis = &self.vis.pairs;
+        let mut count = 0;
+
+        if let [minx, miny, width, _, gridsize] = gridinfo {
+            let grid_count_x = (width / gridsize) as usize;
+
+            for (p0, p1) in vis {
+                core::raster::raster(
+                    *gridsize as usize,
+                    &[self.vis.origin.clone(), p1.clone(), p0.clone()],
+                    |x, y| {
+                        let x = x - minx / gridsize;
+                        let y = y - miny / gridsize;
+                        if x < 0.0 || y < 0.0 {
+                            return;
+                        }
+                        count += 1;
+                        let x = x as usize;
+                        let y = y as usize;
+                        let idx = y * grid_count_x + x;
+                        if idx >= grid.len() {
+                            return;
+                        }
+                        let prev = grid[idx];
+
+                        match op {
+                            FillOp::Add => {
+                                grid[idx] = (prev + amount).min(1.0);
+                            }
+                            FillOp::Subtract => {
+                                grid[idx] = (prev - amount).max(0.0);
+                            }
+                        }
+                    },
+                )
+            }
+        }
+        count
+    }
+
     pub fn fill(&self, gridinfo: &[f64], grid: js_sys::Uint8Array) -> VisibilityResult {
         let vis = &self.vis.pairs;
         let mut count = 0;
@@ -244,9 +291,6 @@ impl Visibility {
         if let [minx, miny, width, height, gridsize] = gridinfo {
             let grid_count_x = (width / gridsize) as usize;
             let grid_count_y = (height / gridsize) as usize;
-            let l = grid_count_x * grid_count_y;
-            let mut v = Vec::with_capacity(l);
-            v.resize(l, 0.0f32);
 
             // find bounding box
             let mut aabb: Option<AABB<f64>> = None;
