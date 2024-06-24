@@ -17,7 +17,7 @@ num-rational = "0.4"
 num-traits = "0.2.*"
 rand = "0.8.5"
 rand_chacha = "0.3.1"
-rgeometry = { path = "../../rgeometry" }
+rgeometry = { git = "https://github.com/yjh0502/rgeometry", branch = "delaunay" }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tracing-subscriber = "0.3"

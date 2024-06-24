@@ -11,5 +11,5 @@ crate-type = ["cdylib"]
 core = { path = "../core" }
 indexmap = "*"
 js-sys = "0.3.59"
-rgeometry = { path = "../../rgeometry" }
+rgeometry = { git = "https://github.com/yjh0502/rgeometry", branch = "delaunay" }
 wasm-bindgen = "0.2.74"

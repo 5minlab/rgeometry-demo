@@ -7,7 +7,7 @@ edition = "2021"
 anyhow = "1.0.62"
 rand = "0.8.5"
 ordslice = "0.3"
-rgeometry = { path = "../../rgeometry" }
+rgeometry = { git = "https://github.com/yjh0502/rgeometry", branch = "delaunay" }
 
 [dev-dependencies]
 criterion = "0.5"
