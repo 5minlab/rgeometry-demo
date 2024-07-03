@@ -86,11 +86,16 @@ impl<T: PolygonScalar> VisibilityResult<T> {
         }
     }
 
-    pub fn clip(&self, d0: Direction<T, 2>, d1: Direction<T, 2>) -> Self {
+    pub fn clip(&self, d0p: Point<T, 2>, d1p: Point<T, 2>) -> Self {
         use Orientation::*;
         if self.pairs.is_empty() {
             return self.clone();
         }
+
+        let d0 = rgeometry::data::Direction::Through(&d0p);
+        let d1 = rgeometry::data::Direction::Through(&d1p);
+
+        let dir = Point::orient_along_direction(&self.origin, d0, &d1p) == CounterClockWise;
 
         let mut start = 0;
         let mut pairs = vec![];
@@ -100,8 +105,8 @@ impl<T: PolygonScalar> VisibilityResult<T> {
             let d0p1 = Point::orient_along_direction(&self.origin, d0, p1);
             let d1p1 = Point::orient_along_direction(&self.origin, d1, p1);
 
-            let p0_in = d0p0 == CounterClockWise && d1p0 == ClockWise;
-            let p1_in = d0p1 == CounterClockWise && d1p1 == ClockWise;
+            let p0_in = (d0p0 == CounterClockWise && d1p0 == ClockWise) ^ !dir;
+            let p1_in = (d0p1 == CounterClockWise && d1p1 == ClockWise) ^ !dir;
 
             if !p0_in && !p1_in {
                 continue;

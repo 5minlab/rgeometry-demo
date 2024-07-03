@@ -225,10 +225,7 @@ impl Visibility {
             let p0 = Point::new([*p0x, *p0y]);
             let p1 = Point::new([*p1x, *p1y]);
 
-            let d0 = rgeometry::data::Direction::Through(&p0);
-            let d1 = rgeometry::data::Direction::Through(&p1);
-
-            self.vis = self.vis.clip(d0, d1);
+            self.vis = self.vis.clip(p0, p1);
         }
     }
 

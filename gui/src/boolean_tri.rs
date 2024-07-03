@@ -204,17 +204,15 @@ impl Demo for DemoBooleanTri {
 
             if self.opt_clip {
                 let dir = t * 0.2;
-                let var = 0.4;
+                let var = 3.0;
 
                 let dirmin = dir - var;
                 let dirmax = dir + var;
 
                 let d0p = Point::new([dirmin.cos(), dirmin.sin()]);
                 let d1p = Point::new([dirmax.cos(), dirmax.sin()]);
-                let d0 = rgeometry::data::Direction::Through(&d0p);
-                let d1 = rgeometry::data::Direction::Through(&d1p);
 
-                vis = vis.clip(d0, d1);
+                vis = vis.clip(d0p, d1p);
             }
 
             if self.opt_limit {
