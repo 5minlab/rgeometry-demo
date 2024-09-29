@@ -38,7 +38,10 @@ impl Simplical {
     }
 
     pub fn from_points(points: &[f64]) -> Self {
-        let points = points.chunks(2).map(|p| Point::new([p[0], p[1]])).collect::<Vec<_>>();
+        let points = points
+            .chunks(2)
+            .map(|p| Point::new([p[0], p[1]]))
+            .collect::<Vec<_>>();
         let p = Polygon::new_unchecked(points);
         let sx = SimplicalChain::from_polygon(&p);
 
@@ -141,6 +144,25 @@ impl Delaunay {
         }
 
         Self { net }
+    }
+
+    pub fn triangles(&self) -> js_sys::Uint16Array {
+        let mut v = Vec::new();
+
+        'outer: for tri in &self.net.triangles {
+            for i in 0..3 {
+                let v0 = tri.vertices[i];
+                if v0.is_super() {
+                    continue 'outer;
+                }
+            }
+
+            for i in 0..3 {
+                let v0 = tri.vertices[i];
+                v.push(v0.0 as u16 - 3);
+            }
+        }
+        js_sys::Uint16Array::from(&v[..])
     }
 
     pub fn neighbors(&self) -> js_sys::Uint16Array {
