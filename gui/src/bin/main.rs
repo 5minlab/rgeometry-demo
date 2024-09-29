@@ -4,12 +4,10 @@
 
 // When compiling natively:
 fn main() {
-    tracing_subscriber::fmt::init();
-
     let options = eframe::NativeOptions::default();
     let _ = eframe::run_native(
         "rgeometry playground",
         options,
-        Box::new(|_cc| Box::new(gui::MyApp::default())),
+        Box::new(|_cc| Ok(Box::new(gui::MyApp::default()))),
     );
 }

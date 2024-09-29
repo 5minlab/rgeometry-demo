@@ -4,7 +4,7 @@
 - [wasm-pack](https://rustwasm.github.io/wasm-pack/installer/)
 
 ```sh
-cargo install wasm-pack --version 0.12.1
+cargo install wasm-pack --version 0.13
 ```
 
 ## gui debugger

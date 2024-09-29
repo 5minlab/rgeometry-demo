@@ -9,8 +9,8 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 anyhow = "1.0.62"
 core = { path = "../core" }
-eframe = "0.27"
-egui_plot = "0.27"
+eframe = { version = "0.29", default_featuers = false }
+egui_plot = "0.29"
 num = "0.4"
 num-bigint = "0.4"
 num-rational = "0.4"
@@ -18,10 +18,8 @@ num-traits = "0.2.*"
 rand = "0.8.5"
 rand_chacha = "0.3.1"
 rgeometry = { git = "https://github.com/yjh0502/rgeometry", branch = "delaunay" }
-
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-tracing-subscriber = "0.3"
+web-sys = "0.3.70"
+wasm-bindgen-futures = "0.4"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-console_error_panic_hook = "0.1.6"
-tracing-wasm = "0.2"
+wasm-bindgen = "=0.2.93"
