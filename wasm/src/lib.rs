@@ -37,6 +37,14 @@ impl Simplical {
         self.clone()
     }
 
+    pub fn from_points(points: &[f64]) -> Self {
+        let points = points.chunks(2).map(|p| Point::new([p[0], p[1]])).collect::<Vec<_>>();
+        let p = Polygon::new_unchecked(points);
+        let sx = SimplicalChain::from_polygon(&p);
+
+        Self { sx }
+    }
+
     pub fn from_rect(
         x: f64,
         y: f64,
