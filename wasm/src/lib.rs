@@ -110,6 +110,11 @@ impl Simplical {
             sx: self.sx.subtract(&other.sx),
         }
     }
+
+    pub fn delauney(&self) -> Delaunay {
+        let (net, _) = build_net(100000.0f64, &self.sx, true);
+        Delaunay { net }
+    }
 }
 
 #[wasm_bindgen]
@@ -144,6 +149,15 @@ impl Delaunay {
         }
 
         Self { net }
+    }
+
+    pub fn vertices(&self) -> js_sys::Float32Array {
+        let mut v = Vec::with_capacity(self.net.vertices.len() * 2);
+        for vert in self.net.vertices.iter().skip(3) {
+            v.push(vert.array[0] as f32);
+            v.push(vert.array[1] as f32);
+        }
+        js_sys::Float32Array::from(&v[..])
     }
 
     pub fn triangles(&self) -> js_sys::Uint16Array {
