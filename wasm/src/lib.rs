@@ -111,7 +111,7 @@ impl Simplical {
         }
     }
 
-    pub fn delauney(&self) -> Delaunay {
+    pub fn delaunay(&self) -> Delaunay {
         let (net, _) = build_net(100000.0f64, &self.sx, true);
         Delaunay { net }
     }
