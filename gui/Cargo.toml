@@ -9,7 +9,7 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 anyhow = "1.0.62"
 core = { path = "../core" }
-eframe = { version = "0.30", default_featuers = false }
+eframe = { version = "0.30", default-features = false }
 egui_plot = "0.30"
 num = "0.4"
 num-bigint = "0.4"
